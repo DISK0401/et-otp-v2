@@ -34,8 +34,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
         with:
-          distribution: temurin
-          java-version: '17'
+          distribution: corretto
+          java-version: '25'
           cache: maven
       - name: Read version
         id: v
@@ -69,8 +69,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
         with:
-          distribution: temurin
-          java-version: '17'
+          distribution: corretto
+          java-version: '25'
           cache: maven
       - name: Build and test
         run: mvn -B -e verify
@@ -85,9 +85,10 @@ jobs:
           if-no-files-found: error
 
   package:
-    # Portable bundles: the official Eclipse Temurin JRE (unchanged, vendor-signed binaries)
-    # plus the jar and a plain launcher script. Nothing is installed and no unsigned
-    # native executable is shipped, which suits managed / corporate PCs.
+    # Portable bundles: a Java runtime created with jlink from Amazon Corretto 25 (LTS, supported
+    # until October 2032), the jar and a plain launcher script (.bat / .command / .sh).
+    # The runtime keeps Amazon's signed binaries; nothing is installed and no unsigned native
+    # executable is shipped, which suits managed / corporate PCs.
     needs: [meta, jar]
     strategy:
       fail-fast: false
@@ -108,13 +109,11 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v7
-      - name: Download Temurin JRE
-        id: jre
+      - name: Set up Amazon Corretto 25
         uses: actions/setup-java@v6
         with:
-          distribution: temurin
-          java-version: '21'
-          java-package: jre
+          distribution: corretto
+          java-version: '25'
       - uses: actions/download-artifact@v8
         with:
           name: jar
@@ -124,12 +123,13 @@ jobs:
           VERSION: ${{ needs.meta.outputs.version }}
           PLATFORM: ${{ matrix.platform }}
           LAUNCHER: ${{ matrix.launcher }}
-          JRE_HOME: ${{ steps.jre.outputs.path }}
         run: |
           root="${APP_NAME}-${VERSION}-${PLATFORM}-portable"
           dir="stage/$root"
           mkdir -p "$dir" dist
-          cp -R "$JRE_HOME" "$dir/runtime"
+          modules="$(jdeps --print-module-deps --ignore-missing-deps "input/${APP_NAME}-${VERSION}.jar")"
+          echo "Runtime modules: $modules"
+          jlink --add-modules "$modules" --strip-debug --no-man-pages --no-header-files --compress=zip-6 --output "$dir/runtime"
           cp "input/${APP_NAME}-${VERSION}.jar" "$dir/${APP_NAME}.jar"
           cp "packaging/$LAUNCHER" packaging/README.txt "$dir/"
           chmod +x "$dir/$LAUNCHER" 2>/dev/null || true
@@ -139,6 +139,24 @@ jobs:
             *)         tar -C stage -czf "dist/$root.tar.gz" "$root" ;;
           esac
           ls -l dist
+      - name: Check signatures of the bundled runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bad = 0
+          Get-ChildItem -Recurse stage -Include java.exe,javaw.exe,jvm.dll | ForEach-Object {
+            $sig = Get-AuthenticodeSignature $_.FullName
+            "{0}: {1} ({2})" -f $_.Name, $sig.Status, $sig.SignerCertificate.Subject
+            if ($sig.Status -ne 'Valid') { $bad++ }
+          }
+          if ($bad -gt 0) { throw "Unsigned runtime binaries found" }
+      - name: Check signatures of the bundled runtime
+        if: runner.os == 'macOS'
+        run: |
+          for f in stage/*/runtime/bin/java stage/*/runtime/lib/server/libjvm.dylib; do
+            codesign --verify --verbose=2 "$f"
+            codesign -dv "$f" 2>&1 | grep -E 'Authority=Developer ID Application' | head -1
+          done
       - uses: actions/upload-artifact@v7
         with:
           name: package-${{ matrix.platform }}
@@ -214,8 +232,8 @@ jobs:
           | \`${APP_NAME}-${VERSION}.jar\` | Any OS with Java 17+: \`java -jar ${APP_NAME}-${VERSION}.jar\` / Java 17 以降が入っている環境向け |
           | \`SHA256SUMS.txt\` | Checksums / チェックサム |
 
-          The portable editions contain the unmodified Eclipse Temurin JRE and a launcher script; nothing is installed.
-          ポータブル版には、Eclipse Temurin の JRE をそのまま同梱しています。起動用のスクリプトを実行するだけで、インストールはしません。
+          The portable editions contain a Java runtime built from Amazon Corretto 25 (LTS) and a launcher script; nothing is installed.
+          ポータブル版には、Amazon Corretto 25（LTS）から作った Java の実行環境を同梱しています。起動用のスクリプトを実行するだけで、インストールはしません。
           EOF
           } > release-notes.md
           cat release-notes.md
