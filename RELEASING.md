@@ -31,13 +31,13 @@
    - バージョンが `2.0.0` のような形で、`-SNAPSHOT` が付いていないこと
    - 同じバージョンのタグがまだないこと
 3. CI が通ったら、「Create a merge commit」でマージします。
-4. マージすると Release ワークフローが動き、Draft のリリースを作ります。Draft には次のファイルが付きます。
+4. マージすると Release ワークフローが動き、Draft のリリースを作ります。Draft には次のファイルが付きます。ポータブル版は Eclipse Temurin の JRE をそのまま同梱しており、インストールや管理者の権限なしで使えます。
 
    | ファイル | 対象 |
    |---|---|
-   | `et-otp-v2-<バージョン>-windows-x64.zip` | Windows。展開して `et-otp-v2.exe` を起動する。Java は不要 |
-   | `et-otp-v2-<バージョン>-macos-arm64.dmg` | macOS（Apple シリコン）。Java は不要 |
-   | `et-otp-v2-<バージョン>-linux-x64.tar.gz` | Linux。Java は不要 |
+   | `et-otp-v2-<バージョン>-windows-x64-portable.zip` | Windows。展開して `et-otp-v2.bat` をダブルクリックする |
+   | `et-otp-v2-<バージョン>-macos-arm64-portable.tar.gz` | macOS（Apple シリコン）。展開して `et-otp-v2.command` をダブルクリックする |
+   | `et-otp-v2-<バージョン>-linux-x64-portable.tar.gz` | Linux。展開して `sh et-otp-v2.sh` を実行する |
    | `et-otp-v2-<バージョン>.jar` | Java 17 以降が入っている環境 |
    | `SHA256SUMS.txt` | チェックサム |
 

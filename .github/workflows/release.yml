@@ -21,7 +21,6 @@ concurrency:
 
 env:
   APP_NAME: et-otp-v2
-  MAIN_CLASS: net.disk0401.etotp.GUI
   DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
 
 jobs:
@@ -86,6 +85,9 @@ jobs:
           if-no-files-found: error
 
   package:
+    # Portable bundles: the official Eclipse Temurin JRE (unchanged, vendor-signed binaries)
+    # plus the jar and a plain launcher script. Nothing is installed and no unsigned
+    # native executable is shipped, which suits managed / corporate PCs.
     needs: [meta, jar]
     strategy:
       fail-fast: false
@@ -93,52 +95,48 @@ jobs:
         include:
           - os: windows-latest
             platform: windows-x64
+            launcher: et-otp-v2.bat
           - os: macos-latest
             platform: macos-arm64
+            launcher: et-otp-v2.command
           - os: ubuntu-latest
             platform: linux-x64
+            launcher: et-otp-v2.sh
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/setup-java@v6
+      - uses: actions/checkout@v7
+      - name: Download Temurin JRE
+        id: jre
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
+          java-package: jre
       - uses: actions/download-artifact@v8
         with:
           name: jar
           path: input
-      - name: Build package with bundled Java runtime
+      - name: Assemble portable bundle
         env:
           VERSION: ${{ needs.meta.outputs.version }}
-          APP_VERSION: ${{ needs.meta.outputs.app_version }}
           PLATFORM: ${{ matrix.platform }}
+          LAUNCHER: ${{ matrix.launcher }}
+          JRE_HOME: ${{ steps.jre.outputs.path }}
         run: |
-          jar="${APP_NAME}-${VERSION}.jar"
-          modules="$(jdeps --print-module-deps --ignore-missing-deps "input/$jar")"
-          echo "Runtime modules: $modules"
-          common=(--name "$APP_NAME" --app-version "$APP_VERSION" --vendor DISK0401
-                  --description "TOTP soft token"
-                  --input input --main-jar "$jar" --main-class "$MAIN_CLASS"
-                  --add-modules "$modules"
-                  --jlink-options "--strip-debug --no-man-pages --no-header-files"
-                  --dest out)
-          mkdir dist
+          root="${APP_NAME}-${VERSION}-${PLATFORM}-portable"
+          dir="stage/$root"
+          mkdir -p "$dir" dist
+          cp -R "$JRE_HOME" "$dir/runtime"
+          cp "input/${APP_NAME}-${VERSION}.jar" "$dir/${APP_NAME}.jar"
+          cp "packaging/$LAUNCHER" packaging/README.txt "$dir/"
+          chmod +x "$dir/$LAUNCHER" 2>/dev/null || true
+          "$dir/runtime/bin/java" -version
           case "$PLATFORM" in
-            windows-*)
-              jpackage --type app-image "${common[@]}"
-              (cd out && 7z a -tzip "../dist/${APP_NAME}-${VERSION}-${PLATFORM}.zip" "$APP_NAME" >/dev/null)
-              ;;
-            macos-*)
-              jpackage --type dmg "${common[@]}"
-              mv out/*.dmg "dist/${APP_NAME}-${VERSION}-${PLATFORM}.dmg"
-              ;;
-            linux-*)
-              jpackage --type app-image "${common[@]}"
-              tar -C out -czf "dist/${APP_NAME}-${VERSION}-${PLATFORM}.tar.gz" "$APP_NAME"
-              ;;
+            windows-*) (cd stage && 7z a -tzip "../dist/$root.zip" "$root" >/dev/null) ;;
+            *)         tar -C stage -czf "dist/$root.tar.gz" "$root" ;;
           esac
           ls -l dist
       - uses: actions/upload-artifact@v7
@@ -210,14 +208,14 @@ jobs:
 
           | File | For |
           |---|---|
-          | \`${APP_NAME}-${VERSION}-windows-x64.zip\` | Windows: unzip and run \`${APP_NAME}.exe\`. No Java needed. / 展開して \`${APP_NAME}.exe\` を起動。Java は不要 |
-          | \`${APP_NAME}-${VERSION}-macos-arm64.dmg\` | macOS (Apple silicon): open and drag to Applications. No Java needed. / 開いてアプリケーションへドラッグ。Java は不要 |
-          | \`${APP_NAME}-${VERSION}-linux-x64.tar.gz\` | Linux: extract and run \`${APP_NAME}/bin/${APP_NAME}\`. No Java needed. / 展開して実行。Java は不要 |
-          | \`${APP_NAME}-${VERSION}.jar\` | Any OS with Java 17+: \`java -jar ${APP_NAME}-${VERSION}.jar\` / Java 17 以降がある環境向け |
+          | \`${APP_NAME}-${VERSION}-windows-x64-portable.zip\` | Windows: extract and double-click \`${APP_NAME}.bat\`. No installation, Java included. / 展開して \`${APP_NAME}.bat\` をダブルクリック。インストール不要で Java も同梱 |
+          | \`${APP_NAME}-${VERSION}-macos-arm64-portable.tar.gz\` | macOS (Apple silicon): extract and double-click \`${APP_NAME}.command\`. Java included. / 展開して \`${APP_NAME}.command\` をダブルクリック。Java を同梱 |
+          | \`${APP_NAME}-${VERSION}-linux-x64-portable.tar.gz\` | Linux: extract and run \`sh ${APP_NAME}.sh\`. Java included. / 展開して \`sh ${APP_NAME}.sh\` を実行。Java を同梱 |
+          | \`${APP_NAME}-${VERSION}.jar\` | Any OS with Java 17+: \`java -jar ${APP_NAME}-${VERSION}.jar\` / Java 17 以降が入っている環境向け |
           | \`SHA256SUMS.txt\` | Checksums / チェックサム |
 
-          The packages are not code-signed. Windows SmartScreen or macOS Gatekeeper may warn on first start.
-          パッケージには署名がないため、初回起動時に Windows SmartScreen や macOS Gatekeeper の警告が出ることがあります。
+          The portable editions contain the unmodified Eclipse Temurin JRE and a launcher script; nothing is installed.
+          ポータブル版には、Eclipse Temurin の JRE をそのまま同梱しています。起動用のスクリプトを実行するだけで、インストールはしません。
           EOF
           } > release-notes.md
           cat release-notes.md
