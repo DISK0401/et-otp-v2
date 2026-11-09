@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>et-otp-v2 – TOTP soft token for the desktop</title>
+  <meta name="description" content="et-otp-v2 is a small Java desktop TOTP (RFC 6238) soft token. Maintained continuation of ecki/et-otp.">
+  <link rel="stylesheet" href="style.css">
+  <link rel="alternate" hreflang="ja" href="ja/">
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="./">et-otp-v2</a>
+    <nav>
+      <a href="https://github.com/DISK0401/et-otp-v2">GitHub</a>
+      <a href="ja/" hreflang="ja" lang="ja">日本語</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <div>
+      <h1>A TOTP soft token for your desktop</h1>
+      <p>et-otp-v2 generates time-based one-time passwords (RFC 6238) for two-step verification. It is a small Java Swing program that keeps your secret encrypted with a password.</p>
+      <a class="button" href="https://github.com/DISK0401/et-otp-v2/releases">Download</a>
+      <a class="button secondary" href="https://github.com/DISK0401/et-otp-v2">Source code</a>
+    </div>
+    <img src="images/screenshot.jpg" width="270" height="225" alt="et-OTP main window showing the unlock password field, the current code and the next code">
+  </div>
+
+  <section id="features">
+    <h2>Features</h2>
+    <ul>
+      <li>Generates 6-digit TOTP codes with a 30-second step (RFC 6238 / RFC 4226), and also shows the next code.</li>
+      <li>Accepts the secret in Base32 text form, as offered by Google, Amazon AWS, Microsoft, Dropbox, GitHub and many other services.</li>
+      <li>Stores the secret encrypted with your unlock password (PBKDF2-HMAC-SHA256 and AES-256-GCM).</li>
+      <li>Copies the code to the clipboard.</li>
+    </ul>
+  </section>
+
+  <section id="install">
+    <h2>Install and run</h2>
+    <p>et-otp-v2 needs Java 17 or later. Download the JAR from the <a href="https://github.com/DISK0401/et-otp-v2/releases">Releases page</a>, copy it to a writable folder and start it:</p>
+    <pre><code>java -jar et-otp-2.0.jar</code></pre>
+    <p>To build it yourself, run <code>mvn verify</code> and use <code>target/et-otp-2.0-SNAPSHOT.jar</code>.</p>
+  </section>
+
+  <section id="setup">
+    <h2>Set up a token</h2>
+    <ol>
+      <li>On the service's two-step verification page, choose the option to show the secret as text instead of a QR code.</li>
+      <li>In et-otp-v2, open <b>et-OTP v2 → Settings</b>, paste the Base32 code and choose an unlock password, then press <b>Save</b>.</li>
+      <li>Enter the unlock password in the main window and press <b>Calc</b> (or Enter). Type the shown code into the service to confirm the setup.</li>
+    </ol>
+    <p>The settings are saved to <code>.et-otp.properties</code> in the current working directory. <b>Help → About</b> shows the full path.</p>
+  </section>
+
+  <section id="upgrade">
+    <h2>Upgrading from et-otp 1.x</h2>
+    <p>et-otp-v2 reads the configuration file of the original et-otp, so you can keep using your existing <code>.et-otp.properties</code>. Start et-otp-v2 in the same folder and unlock it with your current password.</p>
+    <p>On the first successful unlock, et-otp-v2 copies the old file to <code>.et-otp.properties.v1.bak</code> and re-writes <code>.et-otp.properties</code> in the new format. The status line in the main window tells you when this has happened.</p>
+    <div class="note">
+      <p><b>Check the code once after the upgrade.</b> The old format cannot detect every wrong password. If the codes are not accepted by the service, restore the backup file and unlock again with the correct password.</p>
+      <p>The original et-otp 1.x cannot read the new format. If you need to go back, use the backup file. Once the new codes work, delete the backup, because it is still protected by the old, weaker encryption.</p>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <tr><th></th><th>et-otp 1.x</th><th>et-otp-v2</th></tr>
+        <tr><td>Key derivation</td><td>PBKDF2-HMAC-SHA1, 1,000 iterations, 128-bit key</td><td>PBKDF2-HMAC-SHA256, 600,000 iterations, 256-bit key</td></tr>
+        <tr><td>Encryption</td><td>AES in ECB mode with PKCS#5 padding</td><td>AES-256-GCM with a random 96-bit IV</td></tr>
+        <tr><td>Wrong password / tampering</td><td>Not always detected</td><td>Always detected</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="license">
+    <h2>License and credits</h2>
+    <p>et-otp-v2 is free software under the <a href="https://github.com/DISK0401/et-otp-v2/blob/main/LICENSE">GNU General Public License v2.0 only</a>.</p>
+    <p>It is a maintained continuation of <a href="https://github.com/ecki/et-otp">et-otp</a> by Bernd Eckenfels. It includes code from the HOTP reference implementation in RFC 4226 and the Base32 implementation of the Google Authenticator project.</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">et-otp-v2 · maintained by <a href="https://github.com/DISK0401">DISK0401</a> · <a href="https://github.com/DISK0401/et-otp-v2/issues">Report an issue</a></div>
+</footer>
+</body>
+</html>

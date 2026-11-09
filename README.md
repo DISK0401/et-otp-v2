@@ -1,25 +1,30 @@
 # et-otp-v2
 
 [![CI](https://github.com/DISK0401/et-otp-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/DISK0401/et-otp-v2/actions/workflows/ci.yml)
+[![License: GPL-2.0-only](https://img.shields.io/github/license/DISK0401/et-otp-v2)](LICENSE)
+[![Java 17+](https://img.shields.io/badge/Java-17%2B-blue)](https://adoptium.net/)
+[![Website](https://img.shields.io/badge/website-disk0401.github.io-informational)](https://disk0401.github.io/et-otp-v2/ja/)
+[![Last commit](https://img.shields.io/github/last-commit/DISK0401/et-otp-v2)](https://github.com/DISK0401/et-otp-v2/commits/main)
 
-Java (Swing) 製の TOTP ソフトウェアトークン。
+[English](README.en.md) | 日本語
 
-本リポジトリは、Bernd Eckenfels 氏による [ecki/et-otp](https://github.com/ecki/et-otp)（[旧ホームページ](https://ecki.github.io/et-otp/)）を引き継いだフォークです。
-上流は 2020 年以降更新されていないため、メンテナンスと新機能の追加をこちらで行います。上流のコミット履歴はそのまま保持しています。
+Java (Swing) で作ったデスクトップ用の TOTP ソフトトークンです。
 
-> This is a maintained continuation of [ecki/et-otp](https://github.com/ecki/et-otp) by Bernd Eckenfels.
+本リポジトリは Bernd Eckenfels 氏の [ecki/et-otp](https://github.com/ecki/et-otp) を引き継いだフォークです。上流は 2020 年以降更新されていないため、こちらで保守と新機能の追加を続けます。上流のコミット履歴はそのまま残しています。
+
+使い方は [et-otp-v2 のページ](https://disk0401.github.io/et-otp-v2/ja/)にまとめています。
 
 ## 機能
 
-- RFC 6238 (TOTP) / RFC 4226 (HOTP) に基づくワンタイムパスワードの生成
-- Base32 形式のシークレットに対応（Google, Amazon, Dropbox, Microsoft などの 2 段階認証で利用可能）
-- シークレットはパスワードで暗号化して `.et-otp.properties` に保存
-- 生成したコードをクリップボードへコピー
+- RFC 6238 (TOTP) / RFC 4226 (HOTP) に基づいてワンタイムパスワードを生成します。
+- Google、Amazon、Dropbox、Microsoft などの2段階認証で使われる Base32 形式のシークレットに対応しています。
+- シークレットはパスワードで暗号化して `.et-otp.properties` に保存します（PBKDF2-HMAC-SHA256 と AES-256-GCM）。
+- 生成したコードをクリップボードにコピーできます。
 
-## 必要環境
+## 必要な環境
 
-- Java 17 以上
-- ビルドには Maven 3.6.3 以上
+- 実行には Java 17 以降が必要です。
+- ビルドには Maven 3.6.3 以降が必要です。
 
 ## ビルドと実行
 
@@ -28,13 +33,20 @@ mvn verify
 java -jar target/et-otp-2.0-SNAPSHOT.jar
 ```
 
-設定ファイル `.et-otp.properties` はカレントディレクトリに作成されます。
+設定ファイル `.et-otp.properties` は起動したときの作業フォルダに作られます。
+
+## et-otp 1.x からの移行
+
+元の et-otp の `.et-otp.properties` はそのまま読めます。最初にロックを解除したとき、古いファイルを `.et-otp.properties.v1.bak` にコピーしてから、新しい形式で書き直します。注意点は[移行の説明](https://disk0401.github.io/et-otp-v2/ja/#upgrade)を見てください。
 
 ## 上流からの主な変更点
 
-- ビルド対象を Java 17 に更新し、Maven プラグインを最新化
-- CI を Travis CI から GitHub Actions に移行
-- LICENSE ファイルを追加
+- ビルド対象を Java 17 に上げ、Maven プラグインを新しいバージョンにしました。
+- パッケージ名を `net.disk0401.etotp` に変えました。
+- 暗号化の方式を PBKDF2-HMAC-SHA256 と AES-256-GCM に変え、古い形式のファイルを移行できるようにしました。
+- 鍵などの情報を標準出力に書き出していた処理を削除しました。
+- CI を Travis CI から GitHub Actions に移しました。
+- LICENSE ファイルを追加しました。
 
 ## ライセンス
 

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>et-otp-v2 – デスクトップ用 TOTP ソフトトークン</title>
+  <meta name="description" content="et-otp-v2 は Java で作ったデスクトップ用の TOTP（RFC 6238）ソフトトークンです。ecki/et-otp を引き継いで保守しています。">
+  <link rel="stylesheet" href="../style.css">
+  <link rel="alternate" hreflang="en" href="../">
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="./">et-otp-v2</a>
+    <nav>
+      <a href="https://github.com/DISK0401/et-otp-v2">GitHub</a>
+      <a href="../" hreflang="en" lang="en">English</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <div>
+      <h1>デスクトップで使える TOTP ソフトトークン</h1>
+      <p>et-otp-v2 は2段階認証に使う時間ベースのワンタイムパスワード（RFC 6238）を生成します。Java Swing で作った小さなプログラムで、シークレットはパスワードで暗号化して保存します。</p>
+      <a class="button" href="https://github.com/DISK0401/et-otp-v2/releases">ダウンロード</a>
+      <a class="button secondary" href="https://github.com/DISK0401/et-otp-v2">ソースコード</a>
+    </div>
+    <img src="../images/screenshot.jpg" width="270" height="225" alt="et-OTP のメイン画面。ロック解除用のパスワード欄、今のコード、次のコードが表示されている">
+  </div>
+
+  <section id="features">
+    <h2>機能</h2>
+    <ul>
+      <li>30秒ごとに変わる6桁の TOTP コード（RFC 6238 / RFC 4226）を生成し、次のコードもあわせて表示します。</li>
+      <li>Google、Amazon AWS、Microsoft、Dropbox、GitHub などのサービスが提供する Base32 形式のシークレットを使えます。</li>
+      <li>シークレットはロック解除用のパスワードで暗号化して保存します（PBKDF2-HMAC-SHA256 と AES-256-GCM）。</li>
+      <li>生成したコードをクリップボードにコピーできます。</li>
+    </ul>
+  </section>
+
+  <section id="install">
+    <h2>インストールと起動</h2>
+    <p>et-otp-v2 の実行には Java 17 以降が必要です。<a href="https://github.com/DISK0401/et-otp-v2/releases">Releases ページ</a>から JAR をダウンロードし、書き込みできるフォルダに置いて起動します。</p>
+    <pre><code>java -jar et-otp-2.0.jar</code></pre>
+    <p>自分でビルドする場合は <code>mvn verify</code> を実行し、<code>target/et-otp-2.0-SNAPSHOT.jar</code> を使います。</p>
+  </section>
+
+  <section id="setup">
+    <h2>トークンの設定</h2>
+    <ol>
+      <li>サービスの2段階認証の設定画面で、QR コードの代わりにシークレットをテキストで表示する方法を選びます。</li>
+      <li>et-otp-v2 で <b>et-OTP v2 → Settings</b> を開き、Base32 のコードを貼り付けてロック解除用のパスワードを決め、<b>Save</b> を押します。</li>
+      <li>メイン画面にロック解除用のパスワードを入力して <b>Calc</b> を押します（Enter キーでも同じです）。表示されたコードをサービスに入力し、設定を完了します。</li>
+    </ol>
+    <p>設定は起動したときの作業フォルダにある <code>.et-otp.properties</code> に保存されます。ファイルの場所は <b>Help → About</b> で確認できます。</p>
+  </section>
+
+  <section id="upgrade">
+    <h2>et-otp 1.x からの移行</h2>
+    <p>et-otp-v2 は元の et-otp の設定ファイルを読めるので、今の <code>.et-otp.properties</code> をそのまま使えます。同じフォルダで et-otp-v2 を起動し、今のパスワードでロックを解除してください。</p>
+    <p>最初にロックを解除できたとき、et-otp-v2 は古いファイルを <code>.et-otp.properties.v1.bak</code> にコピーし、<code>.et-otp.properties</code> を新しい形式で書き直します。書き直したことは、メイン画面の下のステータス欄に表示されます。</p>
+    <div class="note">
+      <p>移行のあとで、コードが使えるかを一度確かめてください。古い形式ではパスワードの間違いを必ず見つけられるとは限りません。サービスがコードを受け付けない場合は、バックアップのファイルを元に戻し、正しいパスワードでロックを解除し直してください。</p>
+      <p>元の et-otp 1.x は新しい形式を読めません。元のバージョンに戻す場合は、バックアップのファイルを使ってください。新しいコードが使えることを確かめたら、バックアップは削除してください。バックアップは古い方式の弱い暗号化で守られたままです。</p>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <tr><th></th><th>et-otp 1.x</th><th>et-otp-v2</th></tr>
+        <tr><td>鍵の導出</td><td>PBKDF2-HMAC-SHA1、1,000回、128ビットの鍵</td><td>PBKDF2-HMAC-SHA256、600,000回、256ビットの鍵</td></tr>
+        <tr><td>暗号化</td><td>AES の ECB モード、PKCS#5 パディング</td><td>AES-256-GCM、ランダムな96ビットの IV</td></tr>
+        <tr><td>パスワードの間違いと改ざん</td><td>見つけられない場合がある</td><td>必ず見つける</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="license">
+    <h2>ライセンスとクレジット</h2>
+    <p>et-otp-v2 は <a href="https://github.com/DISK0401/et-otp-v2/blob/main/LICENSE">GNU General Public License v2.0 only</a> で公開しているフリーソフトウェアです。</p>
+    <p>Bernd Eckenfels 氏の <a href="https://github.com/ecki/et-otp">et-otp</a> を引き継いで保守しています。RFC 4226 にある HOTP の参照実装と、Google Authenticator プロジェクトの Base32 実装のコードを含みます。</p>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">et-otp-v2 · メンテナー <a href="https://github.com/DISK0401">DISK0401</a> · <a href="https://github.com/DISK0401/et-otp-v2/issues">不具合の報告</a></div>
+</footer>
+</body>
+</html>
