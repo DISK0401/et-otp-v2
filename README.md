@@ -28,7 +28,7 @@ Java (Swing) で作ったデスクトップ用の TOTP ソフトトークンで�
 
 ## ダウンロードと起動
 
-[Releases ページ](https://github.com/DISK0401/et-otp-v2/releases)から、使っている OS に合うポータブル版をダウンロードします。ポータブル版には Java の実行環境（Eclipse Temurin の JRE）を同梱しているので、インストールや管理者の権限は要りません。
+[Releases ページ](https://github.com/DISK0401/et-otp-v2/releases)から、使っている OS に合うポータブル版をダウンロードします。ポータブル版には Amazon Corretto 25（LTS）から作った Java の実行環境を同梱しているので、インストールや管理者の権限は要りません。
 
 | OS | ファイル | 起動の方法 |
 |---|---|---|
@@ -36,7 +36,7 @@ Java (Swing) で作ったデスクトップ用の TOTP ソフトトークンで�
 | macOS（Apple シリコン） | `et-otp-v2-<バージョン>-macos-arm64-portable.tar.gz` | 展開して `et-otp-v2.command` をダブルクリックします。起動できない場合は、ターミナルで `sh et-otp-v2.command` を実行してください。 |
 | Linux | `et-otp-v2-<バージョン>-linux-x64-portable.tar.gz` | 展開して、ターミナルで `sh et-otp-v2.sh` を実行します。 |
 
-同梱している JRE の実行ファイルは Eclipse Foundation の署名が付いた公式のものです。会社や組織のパソコンで使う場合は、ソフトウェアの利用について社内のルールを確かめてから使ってください。
+同梱している Java の実行ファイルは、Amazon の署名が付いた Corretto のものをそのまま使っています。会社や組織のパソコンで使う場合は、ソフトウェアの利用について社内のルールを確かめてから使ってください。
 
 ## ビルドと実行
 

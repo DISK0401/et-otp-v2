@@ -42,7 +42,7 @@
 
   <section id="install">
     <h2>インストールと起動</h2>
-    <p><a href="https://github.com/DISK0401/et-otp-v2/releases">Releases ページ</a>から、使っている OS に合うポータブル版をダウンロードします。ポータブル版には Java の実行環境（Eclipse Temurin の JRE）を同梱しているので、インストールや管理者の権限は要りません。</p>
+    <p><a href="https://github.com/DISK0401/et-otp-v2/releases">Releases ページ</a>から、使っている OS に合うポータブル版をダウンロードします。ポータブル版には Amazon Corretto 25（LTS）から作った Java の実行環境を同梱しているので、インストールや管理者の権限は要りません。</p>
     <div class="table-scroll">
       <table>
         <tr><th>OS</th><th>ファイル</th><th>起動の方法</th></tr>
@@ -51,7 +51,7 @@
         <tr><td>Linux</td><td><code>et-otp-v2-&lt;バージョン&gt;-linux-x64-portable.tar.gz</code></td><td>展開して、ターミナルで <code>sh et-otp-v2.sh</code> を実行します。</td></tr>
       </table>
     </div>
-    <p>同梱している JRE の実行ファイルは Eclipse Foundation の署名が付いた公式のものです。会社や組織のパソコンで使う場合は、ソフトウェアの利用について社内のルールを確かめてから使ってください。</p>
+    <p>同梱している Java の実行ファイルは、Amazon の署名が付いた Corretto のものをそのまま使っています。会社や組織のパソコンで使う場合は、ソフトウェアの利用について社内のルールを確かめてから使ってください。</p>
     <p>Java 17 以降が入っている環境では、JAR だけを使うこともできます。</p>
     <pre><code>java -jar et-otp-v2-&lt;バージョン&gt;.jar</code></pre>
     <p>自分でビルドする場合は <code>mvn verify</code> を実行し、<code>target</code> フォルダの JAR を使います。</p>

@@ -28,7 +28,7 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 
 ## Download and run
 
-Download the portable edition for your OS from the [Releases page](https://github.com/DISK0401/et-otp-v2/releases). It bundles a Java runtime (Eclipse Temurin JRE), so no installation and no administrator rights are needed.
+Download the portable edition for your OS from the [Releases page](https://github.com/DISK0401/et-otp-v2/releases). It bundles a Java runtime built from Amazon Corretto 25 (LTS), so no installation and no administrator rights are needed.
 
 | OS | File | How to start |
 |---|---|---|
@@ -36,7 +36,7 @@ Download the portable edition for your OS from the [Releases page](https://githu
 | macOS (Apple silicon) | `et-otp-v2-<version>-macos-arm64-portable.tar.gz` | Extract it and double-click `et-otp-v2.command`. If it does not start, run `sh et-otp-v2.command` in Terminal. |
 | Linux | `et-otp-v2-<version>-linux-x64-portable.tar.gz` | Extract it and run `sh et-otp-v2.sh` in a terminal. |
 
-The bundled JRE executables are the official ones, signed by the Eclipse Foundation. On a company or organization computer, check your organization's software policy first.
+The bundled Java executables are Amazon's original Corretto binaries with Amazon's signatures. On a company or organization computer, check your organization's software policy first.
 
 ## Build and run
 

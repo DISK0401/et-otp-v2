@@ -42,7 +42,7 @@
 
   <section id="install">
     <h2>Install and run</h2>
-    <p>Download the portable edition for your OS from the <a href="https://github.com/DISK0401/et-otp-v2/releases">Releases page</a>. It bundles a Java runtime (Eclipse Temurin JRE), so no installation and no administrator rights are needed.</p>
+    <p>Download the portable edition for your OS from the <a href="https://github.com/DISK0401/et-otp-v2/releases">Releases page</a>. It bundles a Java runtime built from Amazon Corretto 25 (LTS), so no installation and no administrator rights are needed.</p>
     <div class="table-scroll">
       <table>
         <tr><th>OS</th><th>File</th><th>How to start</th></tr>
@@ -51,7 +51,7 @@
         <tr><td>Linux</td><td><code>et-otp-v2-&lt;version&gt;-linux-x64-portable.tar.gz</code></td><td>Extract it and run <code>sh et-otp-v2.sh</code> in a terminal.</td></tr>
       </table>
     </div>
-    <p>The bundled JRE executables are the official ones, signed by the Eclipse Foundation. On a company or organization computer, check your organization's software policy first.</p>
+    <p>The bundled Java executables are Amazon's original Corretto binaries with Amazon's signatures. On a company or organization computer, check your organization's software policy first.</p>
     <p>With Java 17 or later installed, you can also use the plain JAR:</p>
     <pre><code>java -jar et-otp-v2-&lt;version&gt;.jar</code></pre>
     <p>To build it yourself, run <code>mvn verify</code> and use the JAR in the <code>target</code> folder.</p>
