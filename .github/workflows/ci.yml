@@ -26,7 +26,7 @@ jobs:
         run: mvn -B -e verify
       - name: Upload jar
         if: matrix.java == '17'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: et-otp-jar
           path: target/*.jar
