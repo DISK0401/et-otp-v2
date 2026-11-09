@@ -4,25 +4,24 @@
  */
 package net.disk0401.etotp;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.File;
 
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 
-public class ConfigLocationTest
+class ConfigLocationTest
 {
-    @Rule
-    public TemporaryFolder tmp = new TemporaryFolder();
+    @TempDir
+    File tmp;
 
     @Test
-    public void explicitPathWins() throws Exception
+    void explicitPathWins() throws Exception
     {
-        File cwd = tmp.newFolder("cwd");
-        File home = tmp.newFolder("home");
+        File cwd = newFolder("cwd");
+        File home = newFolder("home");
         new File(cwd, ConfigLocation.FILE_NAME).createNewFile();
 
         File f = ConfigLocation.resolve("custom/token.properties", cwd, home);
@@ -31,10 +30,10 @@ public class ConfigLocationTest
     }
 
     @Test
-    public void existingFileInWorkingDirectoryIsKept() throws Exception
+    void existingFileInWorkingDirectoryIsKept() throws Exception
     {
-        File cwd = tmp.newFolder("cwd");
-        File home = tmp.newFolder("home");
+        File cwd = newFolder("cwd");
+        File home = newFolder("home");
         new File(cwd, ConfigLocation.FILE_NAME).createNewFile();
 
         File f = ConfigLocation.resolve(null, cwd, home);
@@ -43,10 +42,10 @@ public class ConfigLocationTest
     }
 
     @Test
-    public void defaultsToHomeDirectory() throws Exception
+    void defaultsToHomeDirectory() throws Exception
     {
-        File cwd = tmp.newFolder("cwd");
-        File home = tmp.newFolder("home");
+        File cwd = newFolder("cwd");
+        File home = newFolder("home");
 
         File f = ConfigLocation.resolve(null, cwd, home);
 
@@ -54,13 +53,22 @@ public class ConfigLocationTest
     }
 
     @Test
-    public void blankExplicitPathIsIgnored() throws Exception
+    void blankExplicitPathIsIgnored() throws Exception
     {
-        File cwd = tmp.newFolder("cwd");
-        File home = tmp.newFolder("home");
+        File cwd = newFolder("cwd");
+        File home = newFolder("home");
 
         File f = ConfigLocation.resolve("  ", cwd, home);
 
         assertEquals(new File(home, ConfigLocation.FILE_NAME), f);
+    }
+
+    private File newFolder(String name)
+    {
+        File f = new File(tmp, name);
+        if (!f.mkdir()) {
+            throw new IllegalStateException("cannot create " + f);
+        }
+        return f;
     }
 }
