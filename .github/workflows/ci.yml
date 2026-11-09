@@ -24,6 +24,17 @@ jobs:
           cache: maven
       - name: Build and test
         run: mvn -B -e verify
+      - name: Check for APIs deprecated for removal
+        # The jar targets Java 17 (--release 17), so the compiler cannot see APIs that later
+        # Java versions deprecate for removal. Scan against the newest supported release.
+        if: matrix.java == '25'
+        run: |
+          out="$(jdeprscan -J-Duser.language=en -J-Duser.country=US --release 25 --for-removal target/et-otp-*.jar 2>&1)"
+          echo "$out"
+          if printf '%s\n' "$out" | grep -v '^Jar file ' | grep -q .; then
+            echo "::error::The jar uses APIs that are deprecated for removal in Java 25."
+            exit 1
+          fi
       - name: Upload jar
         if: matrix.java == '25'
         uses: actions/upload-artifact@v7
