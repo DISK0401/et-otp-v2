@@ -1,7 +1,8 @@
 /*
  * GUI.java - et-otp: GPL Java TOTP soft token by Bernd Eckenfels.
+ * Modified 2026 by DISK0401 for et-otp-v2 (package renamed to net.disk0401.etotp).
  */
-package net.eckenfels.etotp;
+package net.disk0401.etotp;
 
 import java.awt.Color;
 import java.awt.Desktop;
@@ -53,7 +54,7 @@ import javax.swing.JTextPane;
 import javax.swing.SwingConstants;
 import javax.swing.WindowConstants;
 
-import net.eckenfels.etotp.Base32.DecodingException;
+import net.disk0401.etotp.Base32.DecodingException;
 
 
 /**

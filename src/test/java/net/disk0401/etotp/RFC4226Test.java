@@ -1,7 +1,8 @@
 /*
  * RFC4226Test.java - et-otp: GPL Java TOTP soft token by Bernd Eckenfels.
+ * Modified 2026 by DISK0401 for et-otp-v2 (package renamed to net.disk0401.etotp).
  */
-package net.eckenfels.etotp;
+package net.disk0401.etotp;
 
 import static org.junit.Assert.assertEquals;
 

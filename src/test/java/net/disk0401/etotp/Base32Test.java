@@ -1,14 +1,15 @@
 /*
  * Base32Test.java - et-otp: GPL Java TOTP soft token by Bernd Eckenfels.
+ * Modified 2026 by DISK0401 for et-otp-v2 (package renamed to net.disk0401.etotp).
  */
-package net.eckenfels.etotp;
+package net.disk0401.etotp;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import net.eckenfels.etotp.Base32.DecodingException;
+import net.disk0401.etotp.Base32.DecodingException;
 
 import org.junit.Ignore;
 import org.junit.Test;
