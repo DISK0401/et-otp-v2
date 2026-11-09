@@ -1,0 +1,5 @@
+* text=auto
+*.java text diff=java
+*.jpg binary
+*.png binary
+*.jar binary

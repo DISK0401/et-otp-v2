@@ -3,14 +3,14 @@
 
     <groupId>net.eckenfels.etotp</groupId>
     <artifactId>et-otp</artifactId>
-    <version>1.3-SNAPSHOT</version>
-    <name>net.eckenfels.etotp</name>
-    <description>et-otp: TOTP software token</description>
+    <version>2.0-SNAPSHOT</version>
+    <name>et-otp-v2</name>
+    <description>et-otp-v2: TOTP software token (continuation of ecki/et-otp)</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>1.7</maven.compiler.source>
-        <maven.compiler.target>1.7</maven.compiler.target>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <maven.compiler.release>17</maven.compiler.release>
     </properties>
 
     <build>
@@ -19,78 +19,52 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-clean-plugin</artifactId>
-                    <version>2.5</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-install-plugin</artifactId>
-                    <version>2.5</version>
+                    <version>3.4.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-resources-plugin</artifactId>
-                    <version>2.6</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-jar-plugin</artifactId>
-                    <version>2.4</version>
+                    <version>3.3.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.1</version>
+                    <version>3.13.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>2.17</version>
+                    <version>3.5.2</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-project-info-reports-plugin</artifactId>
-                    <version>2.7</version>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.4.2</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-release-plugin</artifactId>
-                    <version>2.4.1</version>
-                </plugin>
-
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-javadoc-plugin</artifactId>
-                    <version>2.9.1</version>
+                    <artifactId>maven-install-plugin</artifactId>
+                    <version>3.1.3</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-deploy-plugin</artifactId>
-                    <version>2.8</version>
-                </plugin>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-source-plugin</artifactId>
-                    <version>2.2.1</version>
+                    <version>3.1.3</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-site-plugin</artifactId>
-                    <version>3.3</version>
+                    <version>3.21.0</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-project-info-reports-plugin</artifactId>
+                    <version>3.8.0</version>
                 </plugin>
             </plugins>
         </pluginManagement>
 
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-            </plugin>
-
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-resources-plugin</artifactId>
-            </plugin>
-
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
@@ -111,50 +85,56 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>4.13.1</version>
+            <version>4.13.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
-    <url>http://ecki.github.io/et-otp/</url>
+    <url>https://github.com/DISK0401/et-otp-v2</url>
     <inceptionYear>2012</inceptionYear>
     <licenses>
         <license>
-            <name>GNU General Public License v2.0 only</name>
-            <url>http://www.spdx.org/licenses/GPL-2.0</url>
+            <name>GPL-2.0-only</name>
+            <url>https://spdx.org/licenses/GPL-2.0-only.html</url>
+            <distribution>repo</distribution>
         </license>
     </licenses>
 
-    <organization>
-        <url>http://bernd.eckenfels.net</url>
-        <name>Bernd Eckenfels</name>
-    </organization>
-
     <scm>
-        <url>https://github.com/ecki/et-otp</url>
-        <connection>scm:git:https://github.com/ecki/et-otp.git</connection>
-        <developerConnection>scm:git:ssh://git@github.com/ecki/et-otp.git</developerConnection>
-        <tag>master</tag>
+        <url>https://github.com/DISK0401/et-otp-v2</url>
+        <connection>scm:git:https://github.com/DISK0401/et-otp-v2.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/DISK0401/et-otp-v2.git</developerConnection>
+        <tag>main</tag>
     </scm>
 
     <issueManagement>
         <system>GitHub Issues</system>
-        <url>https://github.com/ecki/et-otp/issues</url>
+        <url>https://github.com/DISK0401/et-otp-v2/issues</url>
     </issueManagement>
 
     <ciManagement>
-        <system>Travis-CI.org</system>
-        <url>https://travis-ci.org/ecki/et-otp</url>
+        <system>GitHub Actions</system>
+        <url>https://github.com/DISK0401/et-otp-v2/actions</url>
     </ciManagement>
 
     <developers>
         <developer>
-            <id>ecki</id>
-            <email>bernd-2013@eckenfels.net</email>
-            <name>Bernd Eckenfels</name>
-            <timezone>+2</timezone>
+            <id>DISK0401</id>
+            <name>DISK0401</name>
+            <roles>
+                <role>maintainer</role>
+            </roles>
         </developer>
     </developers>
 
-</project>
+    <contributors>
+        <contributor>
+            <name>Bernd Eckenfels</name>
+            <url>https://github.com/ecki</url>
+            <roles>
+                <role>original author</role>
+            </roles>
+        </contributor>
+    </contributors>
 
+</project>

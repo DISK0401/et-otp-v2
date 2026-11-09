@@ -1,3 +1,14 @@
-antBuild/
-/.et-otp.properties
+# Build output
 target/
+antBuild/
+
+# Local token configuration (contains encrypted secrets)
+/.et-otp.properties
+
+# IDE
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+.vscode/
