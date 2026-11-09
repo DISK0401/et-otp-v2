@@ -101,7 +101,7 @@
     </licenses>
 
     <scm>
-        <url>https://disk0401.github.io/et-otp-v2/</url>
+        <url>https://github.com/DISK0401/et-otp-v2</url>
         <connection>scm:git:https://github.com/DISK0401/et-otp-v2.git</connection>
         <developerConnection>scm:git:ssh://git@github.com/DISK0401/et-otp-v2.git</developerConnection>
         <tag>main</tag>
