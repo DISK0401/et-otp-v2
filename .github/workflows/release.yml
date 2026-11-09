@@ -154,8 +154,13 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           for f in stage/*/runtime/bin/java stage/*/runtime/lib/server/libjvm.dylib; do
-            codesign --verify --verbose=2 "$f"
-            codesign -dv "$f" 2>&1 | grep -E 'Authority=Developer ID Application' | head -1
+            codesign --verify --strict --verbose=2 "$f"
+            info="$(codesign -dvv "$f" 2>&1)"
+            echo "$info" | grep -E '^(Authority|TeamIdentifier|Signature)=' || true
+            if echo "$info" | grep -q 'Signature=adhoc'; then
+              echo "::error::$f has only an ad-hoc signature"
+              exit 1
+            fi
           done
       - uses: actions/upload-artifact@v7
         with:
