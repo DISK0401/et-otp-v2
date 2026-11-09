@@ -3,3 +3,4 @@
 *.jpg binary
 *.png binary
 *.jar binary
+*.sh text eol=lf

@@ -1,0 +1,245 @@
+name: Release
+
+# A merged pull request into main (main accepts no direct pushes) creates a DRAFT release.
+# The maintainer reviews and edits the notes, then publishes it; publishing creates the tag.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build all packages and notes, but do not create a release
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  APP_NAME: et-otp-v2
+  MAIN_CLASS: net.disk0401.etotp.GUI
+  DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      app_version: ${{ steps.v.outputs.app_version }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Read version
+        id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          app_version="${version%-SNAPSHOT}"
+          if ! [[ "$app_version" =~ ^[1-9][0-9]*(\.[0-9]+){0,2}$ ]]; then
+            echo "::error::Version '$version' must look like 2.0.0 (optionally -SNAPSHOT for dry runs)"
+            exit 1
+          fi
+          if [ "$DRY_RUN" != "true" ]; then
+            if [[ "$version" == *-SNAPSHOT ]]; then
+              echo "::error::Cannot release a SNAPSHOT version ($version). Set the release version on develop first."
+              exit 1
+            fi
+            if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+              echo "::error::Tag v$version already exists. Bump the version on develop."
+              exit 1
+            fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+  jar:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Build and test
+        run: mvn -B -e verify
+      - name: Rename jar
+        run: |
+          mkdir dist
+          cp "target/et-otp-${{ needs.meta.outputs.version }}.jar" "dist/${APP_NAME}-${{ needs.meta.outputs.version }}.jar"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: jar
+          path: dist/*.jar
+          if-no-files-found: error
+
+  package:
+    needs: [meta, jar]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+          - os: macos-latest
+            platform: macos-arm64
+          - os: ubuntu-latest
+            platform: linux-x64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v8
+        with:
+          name: jar
+          path: input
+      - name: Build package with bundled Java runtime
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          APP_VERSION: ${{ needs.meta.outputs.app_version }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          jar="${APP_NAME}-${VERSION}.jar"
+          modules="$(jdeps --print-module-deps --ignore-missing-deps "input/$jar")"
+          echo "Runtime modules: $modules"
+          common=(--name "$APP_NAME" --app-version "$APP_VERSION" --vendor DISK0401
+                  --description "TOTP soft token"
+                  --input input --main-jar "$jar" --main-class "$MAIN_CLASS"
+                  --add-modules "$modules"
+                  --jlink-options "--strip-debug --no-man-pages --no-header-files"
+                  --dest out)
+          mkdir dist
+          case "$PLATFORM" in
+            windows-*)
+              jpackage --type app-image "${common[@]}"
+              (cd out && 7z a -tzip "../dist/${APP_NAME}-${VERSION}-${PLATFORM}.zip" "$APP_NAME" >/dev/null)
+              ;;
+            macos-*)
+              jpackage --type dmg "${common[@]}"
+              mv out/*.dmg "dist/${APP_NAME}-${VERSION}-${PLATFORM}.dmg"
+              ;;
+            linux-*)
+              jpackage --type app-image "${common[@]}"
+              tar -C out -czf "dist/${APP_NAME}-${VERSION}-${PLATFORM}.tar.gz" "$APP_NAME"
+              ;;
+          esac
+          ls -l dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-${{ matrix.platform }}
+          path: dist/*
+          if-no-files-found: error
+
+  notes:
+    needs: meta
+    runs-on: ubuntu-latest
+    outputs:
+      provider: ${{ steps.gen.outputs.provider }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Install GitHub Copilot CLI
+        run: npm install -g @github/copilot@1.0.103
+      - name: Generate release notes
+        id: gen
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          COPILOT_MODEL: ${{ vars.COPILOT_MODEL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+        run: bash .github/scripts/release-notes.sh "${{ needs.meta.outputs.version }}" ai-notes.md
+      - uses: actions/upload-artifact@v7
+        with:
+          name: notes
+          path: ai-notes.md
+
+  release:
+    needs: [meta, jar, package, notes]
+    if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Collect assets
+        run: |
+          mkdir assets
+          find artifacts -type f ! -name ai-notes.md -exec cp {} assets/ \;
+          (cd assets && sha256sum * > SHA256SUMS.txt)
+          ls -l assets
+      - name: Write release notes
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          PROVIDER: ${{ needs.notes.outputs.provider }}
+        run: |
+          {
+            if [ "$PROVIDER" != "none" ]; then
+              echo "> Draft notes generated by ${PROVIDER}. Review and edit them before publishing."
+              echo
+              cat artifacts/notes/ai-notes.md
+              echo
+            else
+              echo "> AI notes could not be generated. GitHub's generated notes are appended below."
+              echo
+            fi
+            cat <<EOF
+          ## Downloads / ダウンロード
+
+          | File | For |
+          |---|---|
+          | \`${APP_NAME}-${VERSION}-windows-x64.zip\` | Windows: unzip and run \`${APP_NAME}.exe\`. No Java needed. / 展開して \`${APP_NAME}.exe\` を起動。Java は不要 |
+          | \`${APP_NAME}-${VERSION}-macos-arm64.dmg\` | macOS (Apple silicon): open and drag to Applications. No Java needed. / 開いてアプリケーションへドラッグ。Java は不要 |
+          | \`${APP_NAME}-${VERSION}-linux-x64.tar.gz\` | Linux: extract and run \`${APP_NAME}/bin/${APP_NAME}\`. No Java needed. / 展開して実行。Java は不要 |
+          | \`${APP_NAME}-${VERSION}.jar\` | Any OS with Java 17+: \`java -jar ${APP_NAME}-${VERSION}.jar\` / Java 17 以降がある環境向け |
+          | \`SHA256SUMS.txt\` | Checksums / チェックサム |
+
+          The packages are not code-signed. Windows SmartScreen or macOS Gatekeeper may warn on first start.
+          パッケージには署名がないため、初回起動時に Windows SmartScreen や macOS Gatekeeper の警告が出ることがあります。
+          EOF
+          } > release-notes.md
+          cat release-notes.md
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.meta.outputs.tag }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          PROVIDER: ${{ needs.notes.outputs.provider }}
+        run: |
+          existing="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          if [ "$existing" = "false" ]; then
+            echo "::error::Release $TAG is already published."
+            exit 1
+          elif [ "$existing" = "true" ]; then
+            echo "Replacing the existing draft $TAG"
+            gh release delete "$TAG" --yes
+          fi
+          args=(--draft --target "$GITHUB_SHA" --title "${APP_NAME} ${VERSION}" --notes-file release-notes.md)
+          if [ "$PROVIDER" = "none" ]; then
+            args+=(--generate-notes)
+          fi
+          gh release create "$TAG" "${args[@]}" assets/*
+          echo "Draft release: $(gh release view "$TAG" --json url --jq .url)" >> "$GITHUB_STEP_SUMMARY"
