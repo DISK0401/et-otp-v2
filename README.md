@@ -23,8 +23,20 @@ Java (Swing) で作ったデスクトップ用の TOTP ソフトトークンで�
 
 ## 必要な環境
 
-- 実行には Java 17 以降が必要です。
+- JAR だけを使う場合は、Java 17 以降が必要です。ポータブル版には Java を同梱しています。
 - ビルドには Maven 3.6.3 以降が必要です。
+
+## ダウンロードと起動
+
+[Releases ページ](https://github.com/DISK0401/et-otp-v2/releases)から、使っている OS に合うポータブル版をダウンロードします。ポータブル版には Java の実行環境（Eclipse Temurin の JRE）を同梱しているので、インストールや管理者の権限は要りません。
+
+| OS | ファイル | 起動の方法 |
+|---|---|---|
+| Windows | `et-otp-v2-<バージョン>-windows-x64-portable.zip` | 展開して `et-otp-v2.bat` をダブルクリックします。 |
+| macOS（Apple シリコン） | `et-otp-v2-<バージョン>-macos-arm64-portable.tar.gz` | 展開して `et-otp-v2.command` をダブルクリックします。起動できない場合は、ターミナルで `sh et-otp-v2.command` を実行してください。 |
+| Linux | `et-otp-v2-<バージョン>-linux-x64-portable.tar.gz` | 展開して、ターミナルで `sh et-otp-v2.sh` を実行します。 |
+
+同梱している JRE の実行ファイルは Eclipse Foundation の署名が付いた公式のものです。会社や組織のパソコンで使う場合は、ソフトウェアの利用について社内のルールを確かめてから使ってください。
 
 ## ビルドと実行
 
@@ -33,7 +45,7 @@ mvn verify
 java -jar target/et-otp-2.0-SNAPSHOT.jar
 ```
 
-設定ファイル `.et-otp.properties` は起動したときの作業フォルダに作られます。
+設定はホームフォルダの `.et-otp.properties` に保存されます。起動したときの作業フォルダに `.et-otp.properties` がある場合は、そちらを使います（et-otp 1.x と同じ動きです）。ファイルの場所は Help → About で確認できます。
 
 ## et-otp 1.x からの移行
 
@@ -45,6 +57,7 @@ java -jar target/et-otp-2.0-SNAPSHOT.jar
 - パッケージ名を `net.disk0401.etotp` に変えました。
 - 暗号化の方式を PBKDF2-HMAC-SHA256 と AES-256-GCM に変え、古い形式のファイルを移行できるようにしました。
 - 鍵などの情報を標準出力に書き出していた処理を削除しました。
+- Java を同梱したポータブル版を、リリースのたびに作るようにしました。
 - CI を Travis CI から GitHub Actions に移しました。
 - LICENSE ファイルを追加しました。
 

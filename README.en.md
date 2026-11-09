@@ -23,8 +23,20 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 
 ## Requirements
 
-- Java 17 or later to run.
+- Java 17 or later to run the plain JAR. The portable editions include Java.
 - Maven 3.6.3 or later to build.
+
+## Download and run
+
+Download the portable edition for your OS from the [Releases page](https://github.com/DISK0401/et-otp-v2/releases). It bundles a Java runtime (Eclipse Temurin JRE), so no installation and no administrator rights are needed.
+
+| OS | File | How to start |
+|---|---|---|
+| Windows | `et-otp-v2-<version>-windows-x64-portable.zip` | Extract it and double-click `et-otp-v2.bat`. |
+| macOS (Apple silicon) | `et-otp-v2-<version>-macos-arm64-portable.tar.gz` | Extract it and double-click `et-otp-v2.command`. If it does not start, run `sh et-otp-v2.command` in Terminal. |
+| Linux | `et-otp-v2-<version>-linux-x64-portable.tar.gz` | Extract it and run `sh et-otp-v2.sh` in a terminal. |
+
+The bundled JRE executables are the official ones, signed by the Eclipse Foundation. On a company or organization computer, check your organization's software policy first.
 
 ## Build and run
 
@@ -33,7 +45,7 @@ mvn verify
 java -jar target/et-otp-2.0-SNAPSHOT.jar
 ```
 
-The configuration file `.et-otp.properties` is created in the current working directory.
+The settings are saved to `.et-otp.properties` in your home folder. If `.et-otp.properties` exists in the working directory, that file is used instead (same as et-otp 1.x). Help → About shows the full path.
 
 ## Upgrading from et-otp 1.x
 
@@ -45,6 +57,7 @@ et-otp-v2 reads the `.et-otp.properties` of the original et-otp. On the first un
 - Package renamed to `net.disk0401.etotp`.
 - Encryption changed to PBKDF2-HMAC-SHA256 and AES-256-GCM, with migration of old files.
 - Removed debug output that printed key material to stdout.
+- Portable editions with a bundled Java runtime are built for every release.
 - CI moved from Travis CI to GitHub Actions.
 - Added the LICENSE file.
 

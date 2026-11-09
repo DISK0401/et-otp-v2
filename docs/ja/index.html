@@ -42,9 +42,19 @@
 
   <section id="install">
     <h2>インストールと起動</h2>
-    <p>et-otp-v2 の実行には Java 17 以降が必要です。<a href="https://github.com/DISK0401/et-otp-v2/releases">Releases ページ</a>から JAR をダウンロードし、書き込みできるフォルダに置いて起動します。</p>
-    <pre><code>java -jar et-otp-2.0.jar</code></pre>
-    <p>自分でビルドする場合は <code>mvn verify</code> を実行し、<code>target/et-otp-2.0-SNAPSHOT.jar</code> を使います。</p>
+    <p><a href="https://github.com/DISK0401/et-otp-v2/releases">Releases ページ</a>から、使っている OS に合うポータブル版をダウンロードします。ポータブル版には Java の実行環境（Eclipse Temurin の JRE）を同梱しているので、インストールや管理者の権限は要りません。</p>
+    <div class="table-scroll">
+      <table>
+        <tr><th>OS</th><th>ファイル</th><th>起動の方法</th></tr>
+        <tr><td>Windows</td><td><code>et-otp-v2-&lt;バージョン&gt;-windows-x64-portable.zip</code></td><td>展開して <code>et-otp-v2.bat</code> をダブルクリックします。</td></tr>
+        <tr><td>macOS（Apple シリコン）</td><td><code>et-otp-v2-&lt;バージョン&gt;-macos-arm64-portable.tar.gz</code></td><td>展開して <code>et-otp-v2.command</code> をダブルクリックします。起動できない場合は、ターミナルで <code>sh et-otp-v2.command</code> を実行してください。</td></tr>
+        <tr><td>Linux</td><td><code>et-otp-v2-&lt;バージョン&gt;-linux-x64-portable.tar.gz</code></td><td>展開して、ターミナルで <code>sh et-otp-v2.sh</code> を実行します。</td></tr>
+      </table>
+    </div>
+    <p>同梱している JRE の実行ファイルは Eclipse Foundation の署名が付いた公式のものです。会社や組織のパソコンで使う場合は、ソフトウェアの利用について社内のルールを確かめてから使ってください。</p>
+    <p>Java 17 以降が入っている環境では、JAR だけを使うこともできます。</p>
+    <pre><code>java -jar et-otp-v2-&lt;バージョン&gt;.jar</code></pre>
+    <p>自分でビルドする場合は <code>mvn verify</code> を実行し、<code>target</code> フォルダの JAR を使います。</p>
   </section>
 
   <section id="setup">
@@ -54,7 +64,7 @@
       <li>et-otp-v2 で <b>et-OTP v2 → Settings</b> を開き、Base32 のコードを貼り付けてロック解除用のパスワードを決め、<b>Save</b> を押します。</li>
       <li>メイン画面にロック解除用のパスワードを入力して <b>Calc</b> を押します（Enter キーでも同じです）。表示されたコードをサービスに入力し、設定を完了します。</li>
     </ol>
-    <p>設定は起動したときの作業フォルダにある <code>.et-otp.properties</code> に保存されます。ファイルの場所は <b>Help → About</b> で確認できます。</p>
+    <p>設定はホームフォルダの <code>.et-otp.properties</code> に保存されます。起動したときの作業フォルダに <code>.et-otp.properties</code> がある場合は、そちらを使います（et-otp 1.x と同じ動きです）。ファイルの場所は <b>Help → About</b> で確認できます。</p>
   </section>
 
   <section id="upgrade">
