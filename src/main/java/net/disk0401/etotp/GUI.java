@@ -1,6 +1,6 @@
 /*
  * GUI.java - et-otp: GPL Java TOTP soft token by Bernd Eckenfels.
- * Modified 2026 by DISK0401 for et-otp-v2: package renamed, encryption moved to SecretStore, homepage changed.
+ * Modified 2026 by DISK0401 for et-otp-v2: package renamed, encryption moved to SecretStore, homepage changed, config location.
  */
 package net.disk0401.etotp;
 
@@ -63,7 +63,7 @@ public class GUI implements ActionListener
     private JDialog aboutDialog;
     private JTextField settingsCode;
     private JPasswordField settingsPass;
-    private File configFile = new File(".et-otp.properties");
+    private File configFile = ConfigLocation.resolve();
     private JLabel settingsFileLabel;
     private JLabel statusLabel;
     /** status text when an et-otp 1.x configuration file was upgraded while unlocking, else empty. */
