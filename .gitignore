@@ -4,6 +4,7 @@ antBuild/
 
 # Local token configuration (contains encrypted secrets)
 /.et-otp.properties
+/.et-otp.properties.v1.bak
 
 # IDE
 .classpath

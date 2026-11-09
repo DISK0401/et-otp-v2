@@ -1,6 +1,6 @@
 /*
  * GUI.java - et-otp: GPL Java TOTP soft token by Bernd Eckenfels.
- * Modified 2026 by DISK0401 for et-otp-v2 (package renamed to net.disk0401.etotp).
+ * Modified 2026 by DISK0401 for et-otp-v2: package renamed, encryption moved to SecretStore, homepage changed.
  */
 package net.disk0401.etotp;
 
@@ -19,27 +19,16 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URI;
+import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
-import java.util.Properties;
+import java.util.Arrays;
 
 import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.PBEKeySpec;
-import javax.crypto.spec.SecretKeySpec;
 import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
@@ -63,8 +52,8 @@ import net.disk0401.etotp.Base32.DecodingException;
 public class GUI implements ActionListener
 {
     private static final String VERSION = GUI.class.getPackage().getImplementationVersion();
-    private static final String HELPURL = "http://ecki.github.io/et-otp/";
-    private static final String PROGNAME = "et-OTP";
+    private static final String HELPURL = "https://disk0401.github.io/et-otp-v2/";
+    private static final String PROGNAME = "et-OTP v2";
 
     JPasswordField passwordField;
     private JTextField textField;
@@ -77,6 +66,8 @@ public class GUI implements ActionListener
     private File configFile = new File(".et-otp.properties");
     private JLabel settingsFileLabel;
     private JLabel statusLabel;
+    /** status text when an et-otp 1.x configuration file was upgraded while unlocking, else empty. */
+    private String migrationMessage = "";
 
 
     private GUI() { }
@@ -249,7 +240,6 @@ public class GUI implements ActionListener
     @Override
     public void actionPerformed(ActionEvent e)
     {
-        System.out.println("Event: " + e.getActionCommand() + " " + e.getSource() + " " + e.getID());
 
         statusLabel.setText(" ");
         statusLabel.setForeground(Color.BLACK);
@@ -278,10 +268,15 @@ public class GUI implements ActionListener
             try
             {
                 writeSecret(code, pass);
+                statusLabel.setText("Configuration saved.");
             }
             catch (Exception ex)
             {
                 JOptionPane.showMessageDialog(frame, "Error while writing configuration\n" + ex.getClass().getName() + "\n" + ex.getMessage(), PROGNAME + ": Cannot save configuration", JOptionPane.ERROR_MESSAGE);
+            }
+            finally
+            {
+                Arrays.fill(pass, '\0');
             }
 /*			catch (DecodingException e2) {
             } catch (IOException e3) {
@@ -299,9 +294,9 @@ public class GUI implements ActionListener
                 JDialog d = new JDialog(frame,"About " + PROGNAME, true);
                 JTextPane t = new JTextPane();
                 t.setContentType("text/html");
-                t.setText("<h1>eckes' TOTP Generator (" + PROGNAME + ")</h1><p>This generator can be used to produce a TOTP (RFC 6238) time-based one-time password.</p>" +
+                t.setText("<h1>" + PROGNAME + " TOTP Generator</h1><p>This generator can be used to produce a TOTP (RFC 6238) time-based one-time password.</p>" +
                           "<p>This is a so called soft-token, it will be initialized with a specified BASE32 secret. This method is compatible with the 2-step verification methods of Amazon AWS, Dropbox, GitHub, Google, Microsoft and others.</p>" +
-                          "<p>This Java Program is from <b>Bernd Eckenfels</b>, it includes some code from the reference implementation if HOTP (RFC 4226) as well as Google's BASE32 implementation from the Google Authenticator project.</p>" +
+                          "<p>et-otp-v2 is maintained by <b>DISK0401</b>. It is based on et-otp by <b>Bernd Eckenfels</b> and includes some code from the reference implementation of HOTP (RFC 4226) as well as Google's BASE32 implementation from the Google Authenticator project.</p>" +
                           "<p>License: GPLv2.<br/>Version: " + VERSION + "<br/>Homepage: <b>" + HELPURL + "</b></p><p>Config file: <b>" + configFile.getAbsolutePath()+"</b></p>");
                 t.validate();
                 d.add(t);
@@ -334,8 +329,13 @@ public class GUI implements ActionListener
             try
             {
                 char[] pass = passwordField.getPassword();
-
-                byte[] bytes = readSecret(pass);
+                migrationMessage = "";
+                byte[] bytes;
+                try {
+                    bytes = readSecret(pass);
+                } finally {
+                    Arrays.fill(pass, '\0');
+                }
 
                 long seconds = System.currentTimeMillis() / 1000;
                 long t0 = 0l;
@@ -350,13 +350,14 @@ public class GUI implements ActionListener
 
                 s = RFC4226.generateOTP(bytes, counter+1, 6, false, -1);
                 textLabel.setText(s);
-                statusLabel.setText("");
+                Arrays.fill(bytes, (byte) 0);
+                statusLabel.setText(migrationMessage);
             }
             catch (BadPaddingException bp)
             {
                 errorText("Bad password.");
             }
-            catch (InvalidKeySpecException ik)
+            catch (InvalidKeySpecException | IllegalArgumentException ik)
             {
                 errorText("Password empty or illegal.");
             }
@@ -391,72 +392,33 @@ public class GUI implements ActionListener
     }
 
 
-    private void writeSecret(String code, char[] pass)
-            throws DecodingException, NoSuchAlgorithmException,
-            InvalidKeySpecException, NoSuchPaddingException,
-            InvalidKeyException, IllegalBlockSizeException,
-            BadPaddingException, FileNotFoundException, IOException
+    private void writeSecret(String code, char[] pass) throws DecodingException, IOException, GeneralSecurityException
     {
-        byte[] codeBytes;
-        codeBytes = Base32.decode(code);
-        SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
-        SecureRandom rand = SecureRandom.getInstance("SHA1PRNG");
-        byte[] salt = new byte[16];
-        rand.nextBytes(salt);
-        SecretKey password = f.generateSecret(new PBEKeySpec(pass, salt, 1000, 128));
-        // TODO clean pass
-        password = new SecretKeySpec(password.getEncoded(), "AES");
-
-        Cipher c = Cipher.getInstance("AES");
-        c.init(Cipher.ENCRYPT_MODE, password);
-
-        byte[] enc = c.doFinal(codeBytes);
-
-        System.out.println("WRITE salt=" + Base32.encode(salt) + " encrypted=" + Base32.encode(enc));
-
-        Properties p = new Properties();
-        p.put("key.1.name" , "test");
-        p.put("key.1.salt", Base32.encode(salt));
-        p.put("key.1.encoded", Base32.encode(enc));
-        OutputStream os = new FileOutputStream(configFile);
-        p.store(os , PROGNAME + " " + VERSION + " softtokens");
-        os.close();
+        byte[] codeBytes = Base32.decode(code);
+        try {
+            SecretStore.write(configFile, codeBytes, pass);
+        } finally {
+            Arrays.fill(codeBytes, (byte) 0);
+        }
     }
 
 
-    private byte[] readSecret(char[] pass)
-            throws FileNotFoundException, IOException, DecodingException,
-            InvalidKeySpecException, NoSuchAlgorithmException,
-            NoSuchPaddingException, InvalidKeyException,
-            IllegalBlockSizeException, BadPaddingException
+    /**
+     * Reads the secret and transparently upgrades configuration files written by et-otp 1.x.
+     */
+    private byte[] readSecret(char[] pass) throws IOException, GeneralSecurityException
     {
-        SecretKeyFactory f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
-
-        byte[] salt;
-        SecretKey password;
-        Cipher c;
-        byte[] enc;
-        Properties p;
-        InputStream is = new FileInputStream(configFile);
-        p = new Properties();
-        p.load(is); is.close();
-
-        salt = Base32.decode((String)p.get("key.1.salt"));
-        enc = Base32.decode((String)p.get("key.1.encoded"));
-
-        System.out.println("READ salt=" + Base32.encode(salt) + " encrypted=" + Base32.encode(enc));
-
-        password = f.generateSecret(new PBEKeySpec(pass, salt, 1000, 128));
-        // TODO: overwrite pass
-        password = new SecretKeySpec(password.getEncoded(), "AES");
-
-        System.out.println(" password=" + Base32.encode(password.getEncoded()));
-
-        c = Cipher.getInstance("AES");
-        c.init(Cipher.DECRYPT_MODE, password);
-        byte[] dec = c.doFinal(enc);
-
-        return dec;
+        SecretStore.Result r = SecretStore.read(configFile, pass);
+        if (r.isLegacy()) {
+            // best effort: a failed upgrade must not prevent showing the code
+            try {
+                File backup = SecretStore.migrate(configFile, r, pass);
+                migrationMessage = "Configuration upgraded to the et-otp-v2 format (old file kept as " + backup.getName() + ").";
+            } catch (IOException | GeneralSecurityException e) {
+                migrationMessage = "Could not upgrade configuration: " + e.getMessage();
+            }
+        }
+        return r.secret();
     }
 
 
