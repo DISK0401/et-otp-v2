@@ -734,88 +734,52 @@ public class GUI implements AccountRow.Actions
 
     // --- registering services ---
 
-    /** Reads QR codes on the screens; this window is hidden while the screens are captured. */
+    /**
+     * Lets the user choose the screen or window with the QR code from thumbnails (like the screen
+     * sharing of video conference programs) and registers the service it shows.
+     */
     private void readScreen()
     {
-        setBusy(true);
-        setStatus(msg.get("status.searching"), false);
-        frame.setVisible(false);
-        new SwingWorker<List<String>, int[]>() {
-            @Override
-            protected List<String> doInBackground() throws Exception
-            {
-                Thread.sleep(400); // until this window has disappeared
-                List<String> texts = new ArrayList<>();
-                for (ScreenCapture.Target t : ScreenCapture.displays()) {
-                    texts.addAll(QrSearch.search(t));
-                }
-                publish(new int[] {0, 0});
-                if (texts.stream().noneMatch(QrSearch::isOtpauth)) {
-                    // windows behind other windows; this window is excluded, so it can be shown again
-                    List<ScreenCapture.Target> windows = ScreenCapture.windows();
-                    for (int i = 0; i < windows.size(); i++) {
-                        publish(new int[] {i + 1, windows.size()});
-                        for (String s : QrSearch.search(windows.get(i))) {
-                            if (!texts.contains(s)) {
-                                texts.add(s);
-                            }
-                        }
-                        if (texts.stream().anyMatch(QrSearch::isOtpauth)) {
-                            break;
-                        }
-                    }
-                }
-                return texts;
-            }
-
-            @Override
-            protected void process(List<int[]> chunks)
-            {
-                frame.setVisible(true);
-                int[] last = chunks.get(chunks.size() - 1);
-                if (last[1] > 0) {
-                    setStatus(msg.format("status.searchingWindows", last[0], last[1]), false);
-                }
-            }
-
-            @Override
-            protected void done()
-            {
-                frame.setVisible(true);
-                setBusy(false);
-                setStatus(null, false);
-                handleTexts(result(this), true);
-            }
-        }.execute();
+        ScreenPicker.Choice choice = ScreenPicker.choose(frame, msg);
+        if (choice == null) {
+            return;
+        }
+        if (choice.texts.stream().anyMatch(QrSearch::isOtpauth)) {
+            handleTexts(choice.texts);
+            return;
+        }
+        readAgain(choice.target);
     }
 
 
-    /** Brings the chosen window to the front and reads the screens and that window again. */
-    private void readChosenWindow()
+    /**
+     * Reads the chosen screen or window again, as its first capture showed no QR code. This
+     * program's window is hidden, so it does not cover the QR code. A chosen window is brought to
+     * the front (a browser may not draw while hidden) and read both by itself and from the screens,
+     * for windows that cannot be captured by themselves.
+     */
+    private void readAgain(ScreenCapture.Target target)
     {
-        List<ScreenCapture.Target> windows = ScreenCapture.windows();
-        if (windows.isEmpty()) {
-            return;
-        }
-        String[] titles = numbered(windows.stream().map(t -> t.title).collect(java.util.stream.Collectors.toList()));
-        Object chosen = JOptionPane.showInputDialog(frame, msg.get("qr.windowPrompt"), msg.get("qr.title"),
-                                                    JOptionPane.QUESTION_MESSAGE, null, titles, titles[0]);
-        if (chosen == null) {
-            return;
-        }
-        ScreenCapture.Target target = windows.get(Arrays.asList(titles).indexOf(chosen));
         setBusy(true);
         setStatus(msg.get("status.searching"), false);
         frame.setVisible(false);
-        ScreenCapture.bringToFront(target);
+        if (!target.isDisplay()) {
+            ScreenCapture.bringToFront(target);
+        }
         new SwingWorker<List<String>, Void>() {
             @Override
             protected List<String> doInBackground() throws Exception
             {
-                Thread.sleep(800); // until the window is restored and drawn
+                Thread.sleep(800); // until this window disappeared and the other window is drawn
                 List<String> texts = new ArrayList<>(QrSearch.search(target));
-                for (ScreenCapture.Target t : ScreenCapture.displays()) {
-                    texts.addAll(QrSearch.search(t));
+                if (!target.isDisplay()) {
+                    for (ScreenCapture.Target t : ScreenCapture.displays()) {
+                        for (String s : QrSearch.search(t)) {
+                            if (!texts.contains(s)) {
+                                texts.add(s);
+                            }
+                        }
+                    }
                 }
                 return texts;
             }
@@ -827,7 +791,7 @@ public class GUI implements AccountRow.Actions
                 frame.toFront();
                 setBusy(false);
                 setStatus(null, false);
-                handleTexts(result(this), false);
+                handleTexts(result(this));
             }
         }.execute();
     }
@@ -854,7 +818,7 @@ public class GUI implements AccountRow.Actions
             {
                 setBusy(false);
                 try {
-                    handleTexts(get(), false);
+                    handleTexts(get());
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException e) {
@@ -903,7 +867,7 @@ public class GUI implements AccountRow.Actions
 
 
     /** Registers a service from the QR code texts found, asking the user where needed. */
-    private void handleTexts(List<String> texts, boolean offerWindows)
+    private void handleTexts(List<String> texts)
     {
         List<Account> found = new ArrayList<>();
         String problem = null;
@@ -920,17 +884,8 @@ public class GUI implements AccountRow.Actions
         if (found.isEmpty()) {
             String message = problem != null ? problem
                            : texts.isEmpty() ? msg.get("qr.notFound") : msg.get("qr.otherCodes");
-            if (problem == null && offerWindows && ScreenCapture.windowsSupported()) {
-                Object[] options = {msg.get("qr.chooseWindow"), UIManager.getString("OptionPane.okButtonText", msg.locale())};
-                int answer = JOptionPane.showOptionDialog(frame, message, msg.get("qr.title"), JOptionPane.DEFAULT_OPTION,
-                                                          JOptionPane.INFORMATION_MESSAGE, null, options, options[1]);
-                if (answer == 0) {
-                    readChosenWindow();
-                }
-            } else {
-                JOptionPane.showMessageDialog(frame, message, msg.get("qr.title"),
-                                              problem != null ? JOptionPane.ERROR_MESSAGE : JOptionPane.INFORMATION_MESSAGE);
-            }
+            JOptionPane.showMessageDialog(frame, message, msg.get("qr.title"),
+                                          problem != null ? JOptionPane.ERROR_MESSAGE : JOptionPane.INFORMATION_MESSAGE);
             return;
         }
         Account account = found.get(0);
