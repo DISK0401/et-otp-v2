@@ -10,7 +10,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <maven.compiler.release>17</maven.compiler.release>
+        <maven.compiler.release>25</maven.compiler.release>
     </properties>
 
     <build>
@@ -40,6 +40,10 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.6.1</version>
+                    <configuration>
+                        <!-- the DPAPI tests call Windows functions with the FFM API -->
+                        <argLine>--enable-native-access=ALL-UNNAMED</argLine>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -90,7 +94,7 @@
                                     <version>[3.9.0,)</version>
                                 </requireMavenVersion>
                                 <requireJavaVersion>
-                                    <version>[17,)</version>
+                                    <version>[25,)</version>
                                 </requireJavaVersion>
                             </rules>
                         </configuration>
@@ -109,6 +113,8 @@
                         </manifest>
                         <!-- build information (et-otp issue #6); also in build.properties for the About dialog -->
                         <manifestEntries>
+                            <!-- calls to Windows APIs (DPAPI, window capture) with the FFM API -->
+                            <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
                             <Git-Commit>${git.commit.id.abbrev}</Git-Commit>
                             <Git-Dirty>${git.dirty}</Git-Dirty>
                             <Git-Branch>${git.branch}</Git-Branch>
@@ -164,6 +170,13 @@
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- QR code generator for the reader tests only; not part of the application (MIT) -->
+            <groupId>io.nayuki</groupId>
+            <artifactId>qrcodegen</artifactId>
+            <version>1.8.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

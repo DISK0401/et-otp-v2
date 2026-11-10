@@ -8,73 +8,102 @@ package net.disk0401.etotp;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
-import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import javax.swing.BorderFactory;
+import javax.swing.ButtonGroup;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
-import javax.swing.JTextField;
+import javax.swing.JRadioButton;
 import javax.swing.SwingConstants;
 import javax.swing.WindowConstants;
 
 
 /**
- * Guides through storing the secret when et-otp-v2 starts without a configuration file (et-otp issue #3):
- * 1. what the program does and what is needed, 2. the Base32 secret, 3. the password (entered twice).
+ * First start wizard (et-otp issue #3): explains the program, lets the user choose the protection
+ * (on Windows: Windows user or password) and the password, and offers a desktop shortcut.
+ * The caller creates the configuration file from the result.
  */
 final class SetupWizard extends JDialog
 {
     private static final long serialVersionUID = 1L;
-    /** Width of the explanation texts in pixels. */
-    private static final int TEXT_WIDTH = 420;
-    private static final int STEPS = 3;
+    static final int TEXT_WIDTH = 420;
 
-    /** Saves the secret; shows its own error message and returns false on failure. */
-    interface Saver
+    private static final String STEP_INTRO = "intro";
+    private static final String STEP_PROTECTION = "protection";
+    private static final String STEP_PASSWORD = "password";
+
+    /** The choices of a completed wizard. */
+    static final class Result
     {
-        boolean save(Component parent, String code, char[] pass);
+        final AccountStore.Protection protection;
+        /** the new password for {@link AccountStore.Protection#PASSWORD}; the caller clears it. */
+        final char[] password;
+        final boolean shortcut;
+
+        Result(AccountStore.Protection protection, char[] password, boolean shortcut)
+        {
+            this.protection = protection;
+            this.password = password;
+            this.shortcut = shortcut;
+        }
     }
 
     private final Messages msg;
-    private final Saver saver;
     private final CardLayout cards = new CardLayout();
-    private final JPanel steps = new JPanel(cards);
-    private final JTextField code = new JTextField(30);
+    private final JPanel stepPanel = new JPanel(cards);
+    private final List<String> steps = new ArrayList<>();
+    private final JRadioButton windowsUser;
+    private final JRadioButton password;
+    private final JCheckBox shortcut;
     private final JPasswordField pass = new JPasswordField(20);
     private final JPasswordField confirm = new JPasswordField(20);
     private final JLabel error = new JLabel(" ");
     private final JButton back;
     private final JButton next;
     private int step;
-    private boolean completed;
+    private Result result;
 
 
-    SetupWizard(JFrame owner, Messages msg, File configFile, Saver saver)
+    SetupWizard(JFrame owner, Messages msg, File configFile)
     {
         super(owner, msg.format("wizard.title", GUI.PROGNAME), true);
         this.msg = msg;
-        this.saver = saver;
         setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 
-        steps.add(introStep(configFile), "0");
-        steps.add(inputStep("wizard.secret.text", "wizard.secret.label", code), "1");
-        steps.add(passwordStep(), "2");
+        windowsUser = new JRadioButton(msg.get("protection.windows"), true);
+        password = new JRadioButton(msg.get("protection.password"), false);
+        ButtonGroup group = new ButtonGroup();
+        group.add(windowsUser);
+        group.add(password);
+        shortcut = new JCheckBox(msg.get("wizard.shortcut"), DesktopShortcut.isSupported());
+
+        addStep(STEP_INTRO, introStep(configFile));
+        // without Windows data protection there is nothing to choose: always a password
+        if (Dpapi.isAvailable()) {
+            addStep(STEP_PROTECTION, protectionStep());
+        } else {
+            password.setSelected(true);
+        }
+        addStep(STEP_PASSWORD, passwordStep());
 
         error.setForeground(Color.RED);
         error.setBorder(BorderFactory.createEmptyBorder(0, 15, 0, 15));
 
         back = new JButton(msg.get("wizard.back"));
-        back.addActionListener(e -> showStep(step - 1));
+        back.addActionListener(e -> showStep(Math.max(0, step - 1)));
         next = new JButton(msg.get("wizard.next"));
         next.addActionListener(e -> next());
         JButton cancel = new JButton(msg.get("wizard.cancel"));
@@ -89,7 +118,7 @@ final class SetupWizard extends JDialog
         south.add(buttons, BorderLayout.SOUTH);
 
         setLayout(new BorderLayout());
-        add(steps, BorderLayout.CENTER);
+        add(stepPanel, BorderLayout.CENTER);
         add(south, BorderLayout.SOUTH);
         getRootPane().setDefaultButton(next);
         showStep(0);
@@ -97,10 +126,10 @@ final class SetupWizard extends JDialog
     }
 
 
-    /** @return true if the secret was saved */
-    boolean isCompleted()
+    /** @return the choices, or null if the wizard was cancelled */
+    Result result()
     {
-        return completed;
+        return result;
     }
 
 
@@ -109,21 +138,33 @@ final class SetupWizard extends JDialog
     {
         pass.setText("");
         confirm.setText("");
-        code.setText("");
         super.dispose();
+    }
+
+
+    private void addStep(String name, JPanel panel)
+    {
+        steps.add(name);
+        stepPanel.add(panel, name);
+    }
+
+
+    /** @return true if the current step is the last one; the password step is skipped for the Windows user */
+    private boolean isLast()
+    {
+        String name = steps.get(step);
+        return STEP_PASSWORD.equals(name) || (STEP_PROTECTION.equals(name) && windowsUser.isSelected());
     }
 
 
     private void showStep(int newStep)
     {
         step = newStep;
-        cards.show(steps, Integer.toString(step));
+        cards.show(stepPanel, steps.get(step));
         error.setText(" ");
         back.setEnabled(step > 0);
-        next.setText(msg.get(step == STEPS - 1 ? "wizard.finish" : "wizard.next"));
-        if (step == 1) {
-            code.requestFocusInWindow();
-        } else if (step == 2) {
+        next.setText(msg.get(isLast() ? "wizard.finish" : "wizard.next"));
+        if (STEP_PASSWORD.equals(steps.get(step))) {
             pass.requestFocusInWindow();
         }
     }
@@ -131,15 +172,14 @@ final class SetupWizard extends JDialog
 
     private void next()
     {
-        if (step == 1) {
-            String problem = SecretInput.checkSecret(code.getText());
-            if (problem != null) {
-                error.setText(msg.get(problem));
-                return;
-            }
-        }
-        if (step < STEPS - 1) {
+        if (!isLast()) {
             showStep(step + 1);
+            return;
+        }
+        boolean wantShortcut = shortcut.isSelected() && DesktopShortcut.isSupported();
+        if (windowsUser.isSelected() && Dpapi.isAvailable()) {
+            result = new Result(AccountStore.Protection.WINDOWS_USER, null, wantShortcut);
+            dispose();
             return;
         }
         char[] p = pass.getPassword();
@@ -148,14 +188,12 @@ final class SetupWizard extends JDialog
             String problem = SecretInput.checkPassword(p, c);
             if (problem != null) {
                 error.setText(msg.get(problem));
+                Arrays.fill(p, '\0');
                 return;
             }
-            if (saver.save(this, code.getText(), p)) {
-                completed = true;
-                dispose();
-            }
+            result = new Result(AccountStore.Protection.PASSWORD, p, wantShortcut);
+            dispose();
         } finally {
-            Arrays.fill(p, '\0');
             Arrays.fill(c, '\0');
         }
     }
@@ -166,21 +204,28 @@ final class SetupWizard extends JDialog
         JPanel panel = textPanel();
         panel.add(text("<h2>" + GUI.html(msg.format("wizard.intro.heading", GUI.PROGNAME)) + "</h2>"
                        + para(msg.format("wizard.intro.text1", GUI.PROGNAME))
-                       + para(msg.get("wizard.intro.text2"))
+                       + para(msg.format("wizard.intro.text2", GUI.PROGNAME))
                        + para(msg.get("wizard.intro.text3"))), constraints(0));
         panel.add(GUI.pathText(configFile), constraints(1));
         return fillRest(panel);
     }
 
 
-    private JPanel inputStep(String textKey, String labelKey, JTextField field)
+    private JPanel protectionStep()
     {
         JPanel panel = textPanel();
-        panel.add(text(para(msg.get(textKey))), constraints(0));
-        GridBagConstraints c = constraints(1);
-        panel.add(new JLabel(msg.get(labelKey)), c);
-        c.gridy = 2;
-        panel.add(field, c);
+        panel.add(text(para(msg.get("wizard.protection.text"))), constraints(0));
+        panel.add(windowsUser, constraints(1));
+        panel.add(note(msg.get("protection.windows.note")), constraints(2));
+        panel.add(password, constraints(3));
+        panel.add(note(msg.get("protection.password.note")), constraints(4));
+        if (DesktopShortcut.isSupported()) {
+            GridBagConstraints c = constraints(5);
+            c.insets = new Insets(15, 0, 5, 0);
+            panel.add(shortcut, c);
+        }
+        windowsUser.addActionListener(e -> showStep(step));
+        password.addActionListener(e -> showStep(step));
         return fillRest(panel);
     }
 
@@ -189,13 +234,21 @@ final class SetupWizard extends JDialog
     {
         JPanel panel = textPanel();
         panel.add(text(para(msg.get("wizard.password.text"))), constraints(0));
+        panel.add(passwordFields(msg, pass, confirm), constraints(1));
+        return fillRest(panel);
+    }
+
+
+    /** The "new password" and "confirm password" fields, also used in the settings. */
+    static JPanel passwordFields(Messages msg, JPasswordField pass, JPasswordField confirm)
+    {
         JPanel fields = new JPanel(new GridBagLayout());
         GridBagConstraints c = new GridBagConstraints();
         c.insets = new Insets(5, 0, 5, 10);
         c.anchor = GridBagConstraints.EAST;
-        fields.add(new JLabel(msg.get("settings.password"), SwingConstants.RIGHT), c);
+        fields.add(new JLabel(msg.get("protection.newPassword"), SwingConstants.RIGHT), c);
         c.gridy = 1;
-        fields.add(new JLabel(msg.get("settings.confirm"), SwingConstants.RIGHT), c);
+        fields.add(new JLabel(msg.get("protection.confirm"), SwingConstants.RIGHT), c);
         c.gridx = 1;
         c.gridy = 0;
         c.anchor = GridBagConstraints.WEST;
@@ -204,8 +257,18 @@ final class SetupWizard extends JDialog
         fields.add(pass, c);
         c.gridy = 1;
         fields.add(confirm, c);
-        panel.add(fields, constraints(1));
-        return fillRest(panel);
+        return fields;
+    }
+
+
+    /** A short explanation under a choice, indented like the choice's text. */
+    static JLabel note(String text)
+    {
+        JLabel label = new JLabel("<html><body style=\"width: " + (TEXT_WIDTH - 24) + "px\">" + GUI.html(text)
+                                  + "</body></html>");
+        label.setBorder(BorderFactory.createEmptyBorder(0, 24, 8, 0));
+        label.setForeground(Color.DARK_GRAY);
+        return label;
     }
 
 

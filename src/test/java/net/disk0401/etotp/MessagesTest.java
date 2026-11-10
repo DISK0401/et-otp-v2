@@ -80,7 +80,7 @@ class MessagesTest
                 assertTrue(new MessageFormat(enText).format(new Object[] { "X" }).contains("X"), key);
                 assertTrue(new MessageFormat(jaText).format(new Object[] { "X" }).contains("X"), key);
             }
-            if (!key.startsWith("language.")) {
+            if (!key.startsWith("language.") && !key.equals("main.title")) {
                 assertNotEquals(enText, jaText, "not translated: " + key);
             }
         }

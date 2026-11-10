@@ -98,6 +98,12 @@ final class SecretStore
             return version;
         }
 
+        /** @return the file contents the secret was read from */
+        byte[] source()
+        {
+            return source;
+        }
+
         /** @return true if the file uses the et-otp 1.x format and should be re-written */
         boolean isLegacy()
         {
@@ -125,32 +131,145 @@ final class SecretStore
 
     private static Properties encrypt(byte[] secret, char[] pass, int iterations) throws GeneralSecurityException
     {
-        byte[] salt = new byte[SALT_BYTES];
-        byte[] iv = new byte[IV_BYTES];
-        RANDOM.nextBytes(salt);
-        RANDOM.nextBytes(iv);
-
-        byte[] key = deriveKey(KDF, pass, salt, iterations, KEY_BITS);
-        byte[] enc;
+        PasswordKey key = PasswordKey.create(pass, iterations);
         try {
-            Cipher c = Cipher.getInstance(CIPHER);
-            c.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(TAG_BITS, iv));
-            c.updateAAD(aad(CURRENT_VERSION, KDF, iterations, CIPHER));
-            enc = c.doFinal(secret);
+            Properties p = new Properties();
+            p.setProperty(PREFIX + "name", "default");
+            encrypt(p, secret, key, CURRENT_VERSION);
+            return p;
         } finally {
-            Arrays.fill(key, (byte) 0);
+            key.destroy();
+        }
+    }
+
+
+    /**
+     * A key derived from a password, with its salt and iteration count. The account list keeps it
+     * while the program runs, so saving a change does not repeat the slow key derivation.
+     */
+    static final class PasswordKey
+    {
+        private final byte[] key;
+        private final byte[] salt;
+        private final int iterations;
+
+        private PasswordKey(byte[] key, byte[] salt, int iterations)
+        {
+            this.key = key;
+            this.salt = salt;
+            this.iterations = iterations;
         }
 
-        Properties p = new Properties();
-        p.setProperty(PREFIX + "name", "default");
-        p.setProperty(PREFIX + "version", Integer.toString(CURRENT_VERSION));
+        /** Derives a key with a new random salt. The password array is not modified. */
+        static PasswordKey create(char[] pass, int iterations) throws GeneralSecurityException
+        {
+            byte[] salt = new byte[SALT_BYTES];
+            RANDOM.nextBytes(salt);
+            return new PasswordKey(deriveKey(KDF, pass, salt, iterations, KEY_BITS), salt, iterations);
+        }
+
+        /** Derives the key with the salt and iteration count stored in the properties. */
+        static PasswordKey from(Properties p, char[] pass) throws IOException, GeneralSecurityException
+        {
+            String kdf = required(p, "kdf");
+            String cipher = required(p, "cipher");
+            int iterations;
+            try {
+                iterations = Integer.parseInt(required(p, "iterations").trim());
+            } catch (NumberFormatException e) {
+                throw new IOException("Invalid iteration count in configuration");
+            }
+            if (!KDF.equals(kdf) || !CIPHER.equals(cipher) || iterations < 1 || iterations > MAX_ITERATIONS) {
+                throw new IOException("Unsupported configuration parameters: " + kdf + ", " + cipher + ", " + iterations);
+            }
+            byte[] salt = decode(p, "salt");
+            check(salt.length == SALT_BYTES, "salt", "must be " + SALT_BYTES + " bytes");
+            return new PasswordKey(deriveKey(kdf, pass, salt, iterations, KEY_BITS), salt, iterations);
+        }
+
+        /** Overwrites the key in memory; the object cannot be used afterwards. */
+        void destroy()
+        {
+            Arrays.fill(key, (byte) 0);
+        }
+    }
+
+
+    /**
+     * Encrypts the data with AES-256-GCM and a new random IV and writes the format properties
+     * (version, kdf, iterations, cipher, salt, iv, encoded) into p. The version is authenticated.
+     */
+    static void encrypt(Properties p, byte[] plain, PasswordKey key, int version) throws GeneralSecurityException
+    {
+        byte[] iv = new byte[IV_BYTES];
+        RANDOM.nextBytes(iv);
+        Cipher c = Cipher.getInstance(CIPHER);
+        c.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key.key, "AES"), new GCMParameterSpec(TAG_BITS, iv));
+        c.updateAAD(aad(version, KDF, key.iterations, CIPHER));
+        byte[] enc = c.doFinal(plain);
+
+        p.setProperty(PREFIX + "version", Integer.toString(version));
         p.setProperty(PREFIX + "kdf", KDF);
-        p.setProperty(PREFIX + "iterations", Integer.toString(iterations));
+        p.setProperty(PREFIX + "iterations", Integer.toString(key.iterations));
         p.setProperty(PREFIX + "cipher", CIPHER);
-        p.setProperty(PREFIX + "salt", Base32.encode(salt));
+        p.setProperty(PREFIX + "salt", Base32.encode(key.salt));
         p.setProperty(PREFIX + "iv", Base32.encode(iv));
         p.setProperty(PREFIX + "encoded", Base32.encode(enc));
+    }
+
+
+    /**
+     * Decrypts data written by {@link #encrypt(Properties, byte[], PasswordKey, int)}.
+     *
+     * @throws javax.crypto.BadPaddingException if the key is wrong or the file was modified
+     */
+    static byte[] decrypt(Properties p, PasswordKey key, int version) throws IOException, GeneralSecurityException
+    {
+        byte[] iv = decode(p, "iv");
+        byte[] enc = decode(p, "encoded");
+        check(iv.length == IV_BYTES, "iv", "must be " + IV_BYTES + " bytes");
+        check(enc.length > TAG_BITS / 8, "encoded", "too short");
+        Cipher c = Cipher.getInstance(CIPHER);
+        c.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key.key, "AES"), new GCMParameterSpec(TAG_BITS, iv));
+        c.updateAAD(aad(version, KDF, key.iterations, CIPHER));
+        return c.doFinal(enc);
+    }
+
+
+    /** Parses the configuration file contents. */
+    static Properties load(byte[] source) throws IOException
+    {
+        Properties p = new Properties();
+        try (InputStream is = new ByteArrayInputStream(source)) {
+            p.load(is);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Configuration file is malformed: " + e.getMessage());
+        }
         return p;
+    }
+
+
+    /**
+     * @return the format version of the properties: 1 for et-otp 1.x (no version property), else the number
+     * @throws IOException for an invalid version, or a version 2 file whose version was removed
+     */
+    static int formatVersion(Properties p) throws IOException
+    {
+        String versionText = p.getProperty(PREFIX + "version");
+        if (versionText == null) {
+            // a v2 file with a removed version must not be decrypted with the unauthenticated legacy format
+            for (String name : V2_ONLY) {
+                if (p.getProperty(PREFIX + name) != null) {
+                    throw new IOException("Configuration file is malformed (missing " + PREFIX + "version)");
+                }
+            }
+            return 1;
+        }
+        try {
+            return Integer.parseInt(versionText.trim());
+        } catch (NumberFormatException e) {
+            throw new IOException("Invalid configuration format version: " + versionText);
+        }
     }
 
 
@@ -163,61 +282,20 @@ final class SecretStore
     static Result read(File file, char[] pass) throws IOException, GeneralSecurityException
     {
         byte[] source = Files.readAllBytes(file.toPath());
-        Properties p = new Properties();
-        try (InputStream is = new ByteArrayInputStream(source)) {
-            p.load(is);
-        } catch (IllegalArgumentException e) {
-            throw new IOException("Configuration file is malformed: " + e.getMessage());
-        }
-
-        String versionText = p.getProperty(PREFIX + "version");
-        if (versionText == null) {
-            // a v2 file with a removed version must not be decrypted with the unauthenticated legacy format
-            for (String name : V2_ONLY) {
-                if (p.getProperty(PREFIX + name) != null) {
-                    throw new IOException("Configuration file is malformed (missing " + PREFIX + "version)");
-                }
-            }
+        Properties p = load(source);
+        int version = formatVersion(p);
+        if (version == 1) {
             return new Result(readLegacy(p, pass), 1, source);
-        }
-
-        int version;
-        try {
-            version = Integer.parseInt(versionText.trim());
-        } catch (NumberFormatException e) {
-            throw new IOException("Invalid configuration format version: " + versionText);
         }
         if (version != CURRENT_VERSION) {
             throw new IOException("Unsupported configuration format version " + version
                                   + " (this program supports up to " + CURRENT_VERSION + ")");
         }
-
-        String kdf = required(p, "kdf");
-        String cipher = required(p, "cipher");
-        int iterations;
+        PasswordKey key = PasswordKey.from(p, pass);
         try {
-            iterations = Integer.parseInt(required(p, "iterations").trim());
-        } catch (NumberFormatException e) {
-            throw new IOException("Invalid iteration count in configuration");
-        }
-        if (!KDF.equals(kdf) || !CIPHER.equals(cipher) || iterations < 1 || iterations > MAX_ITERATIONS) {
-            throw new IOException("Unsupported configuration parameters: " + kdf + ", " + cipher + ", " + iterations);
-        }
-        byte[] salt = decode(p, "salt");
-        byte[] iv = decode(p, "iv");
-        byte[] enc = decode(p, "encoded");
-        check(salt.length == SALT_BYTES, "salt", "must be " + SALT_BYTES + " bytes");
-        check(iv.length == IV_BYTES, "iv", "must be " + IV_BYTES + " bytes");
-        check(enc.length > TAG_BITS / 8, "encoded", "too short");
-
-        byte[] key = deriveKey(kdf, pass, salt, iterations, KEY_BITS);
-        try {
-            Cipher c = Cipher.getInstance(cipher);
-            c.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(TAG_BITS, iv));
-            c.updateAAD(aad(version, kdf, iterations, cipher));
-            return new Result(c.doFinal(enc), version, source);
+            return new Result(decrypt(p, key, version), version, source);
         } finally {
-            Arrays.fill(key, (byte) 0);
+            key.destroy();
         }
     }
 
@@ -235,7 +313,7 @@ final class SecretStore
      */
     static File migrate(File file, Result legacy, char[] pass) throws IOException, GeneralSecurityException
     {
-        File backup = backup(file, legacy.source);
+        File backup = backup(file, legacy.source, ".v1.bak");
         Properties upgraded = encrypt(legacy.secret(), pass, DEFAULT_ITERATIONS);
         // checked after the slow key derivation: narrows (but cannot close) the window for
         // overwriting a configuration that another instance saved meanwhile
@@ -247,9 +325,13 @@ final class SecretStore
     }
 
 
-    private static File backup(File file, byte[] content) throws IOException
+    /**
+     * Copies the content to {@code <file><suffix>}, or to the next free name with .1, .2, ... if that
+     * exists with different content. An existing backup with the same content is reused.
+     */
+    static File backup(File file, byte[] content, String suffix) throws IOException
     {
-        String base = file.getPath() + ".v1.bak";
+        String base = file.getPath() + suffix;
         for (int i = 0; i < 1000; i++) {
             File backup = new File(i == 0 ? base : base + "." + i);
             if (backup.exists()) {
