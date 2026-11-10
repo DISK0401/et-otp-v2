@@ -66,9 +66,17 @@ if [ -n "${COPILOT_GITHUB_TOKEN:-}" ] && command -v copilot >/dev/null 2>&1; the
   if [ -n "${COPILOT_MODEL:-}" ]; then
     model_args=(--model "$COPILOT_MODEL")
   fi
-  # No tool permissions are granted: the model can only answer with text.
-  if result="$(copilot -p "$(cat "$prompt_file")" -s --no-color --no-ask-user \
-                 --no-custom-instructions --disable-builtin-mcps "${model_args[@]}" 2>copilot.err)" \
+  # The commit messages in the prompt are untrusted, so the model must only answer with text.
+  # Copilot CLI is an agent: in prompt mode it can read files (view, grep, glob) without approval.
+  # --available-tools with a name that matches no tool hides every tool (an empty value is
+  # ignored and exposes all of them; checked with 1.0.103). The deny rules are a second layer.
+  # It runs in an empty directory and does not get the OpenAI key.
+  sandbox_dir="$(mktemp -d)"
+  if result="$(env -u OPENAI_API_KEY copilot -C "$sandbox_dir" -p "$(cat "$prompt_file")" \
+                 -s --no-color --no-ask-user --no-auto-update \
+                 --no-custom-instructions --disable-builtin-mcps --disallow-temp-dir \
+                 --available-tools=none --deny-tool=shell --deny-tool=write --deny-tool=url \
+                 "${model_args[@]}" 2>copilot.err)" \
      && [ -n "$result" ]; then
     provider="copilot"
   else
@@ -77,6 +85,7 @@ if [ -n "${COPILOT_GITHUB_TOKEN:-}" ] && command -v copilot >/dev/null 2>&1; the
     result=""
   fi
   rm -f copilot.err
+  rm -rf "$sandbox_dir"
 fi
 
 if [ "$provider" = "none" ] && [ -n "${OPENAI_API_KEY:-}" ]; then
