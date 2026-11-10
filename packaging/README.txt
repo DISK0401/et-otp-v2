@@ -14,6 +14,12 @@ position to .et-otp-ui.properties next to it. The location can be changed in the
 or with Settings > General > Move.... To carry the settings with this folder (e.g. on a USB
 drive), follow the comment in the launcher file.
 
+Codes for batch files and scripts
+Started with --code <name>, the code of the service is written to the console instead of opening
+the window, for example: et-otp-v2.bat --code AWS (macOS: sh et-otp-v2.command --code AWS,
+Linux: sh et-otp-v2.sh --code AWS).
+Run with --help for the options.
+
 If you use this on a company or organization computer, check your organization's software
 policy first.
 
@@ -34,6 +40,9 @@ et-otp-v2 ポータブル版
 
 設定の保存先
 設定はホームフォルダの .et-otp.properties に、言語とウィンドウの位置は同じフォルダの .et-otp-ui.properties に保存されます。保存先は、初期設定のウィザードか、設定画面の「全般」タブの「移動...」で変えられます。USB メモリなどで持ち運ぶ場合は、起動用のファイルの説明に従って、設定をこのフォルダに保存するように変えられます。
+
+バッチファイルなどからコードを取得する
+--code <サービス名> を付けて起動すると、ウィンドウを開かずに、そのサービスのコードを出力します。例: et-otp-v2.bat --code AWS（macOS では sh et-otp-v2.command --code AWS、Linux では sh et-otp-v2.sh --code AWS）。オプションは --help で確認できます。
 
 会社や組織のパソコンで使う場合は、ソフトウェアの利用について社内のルールを確かめてから使ってください。
 

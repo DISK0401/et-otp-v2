@@ -72,6 +72,21 @@
     <p>The user interface follows the language of the OS: Japanese on a Japanese system, English otherwise. To change it, open <b>et-OTP-v2 → Settings</b> and select the language on the <b>General</b> tab.</p>
   </section>
 
+  <section id="command-line">
+    <h2>Get a code on the command line</h2>
+    <p>Started with <code>--code &lt;name&gt;</code>, et-otp-v2 writes the current code of the service without opening the window, so a batch file or script can use it where a 2-step verification code is needed. With the portable edition for Windows:</p>
+    <pre><code>for /f "delims=" %%c in ('call "C:\tools\et-otp-v2\et-otp-v2.bat" --code AWS') do set MFA_CODE=%%c
+if not defined MFA_CODE exit /b 1</code></pre>
+    <ul>
+      <li>The name is the name shown in et-otp-v2. If no service has exactly this name, the case is ignored. <code>--list</code> writes the names of the registered services.</li>
+      <li>If the services are protected with a password, you are asked for it; the password is not shown while you type. With protection for your Windows user, the code is written without a question.</li>
+      <li>If the code changes within 3 seconds, the next code is waited for and written.</li>
+      <li>Only the code goes to the standard output; the password prompt and errors go to the standard error output. The exit code is 0 when done, 1 when failed and 2 for wrong options.</li>
+      <li>The configuration file is only read, so this also works while the window is open. Files in the format of et-otp 1.x and et-otp-v2 2.0 cannot be read: open them once in the window to convert them first.</li>
+      <li>With the portable edition for macOS run <code>sh et-otp-v2.command --code AWS</code>, for Linux <code>sh et-otp-v2.sh --code AWS</code>, with the plain JAR <code>java -jar et-otp-v2-&lt;version&gt;.jar --code AWS</code>.</li>
+    </ul>
+  </section>
+
   <section id="upgrade">
     <h2>Upgrading from et-otp 1.x and et-otp-v2 2.0</h2>
     <p>et-otp-v2 reads the configuration files of the original et-otp and of et-otp-v2 2.0, so you can keep using your existing <code>.et-otp.properties</code>. Start et-otp-v2 in the same folder and unlock it with your current password.</p>
