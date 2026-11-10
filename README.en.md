@@ -23,6 +23,7 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 - The user interface is in English and Japanese. It is shown in Japanese if the language of the OS is Japanese, else in English, and can be switched on the General tab of the settings.
 - When started without a configuration file, a setup wizard opens. It asks for the protection and the location of the configuration file and, on Windows, can create a desktop shortcut. You can also choose an existing configuration file and keep using it.
 - The window opens where it was when the program was last closed.
+- Started with `--code <name>`, it writes the code without opening the window, for batch files and scripts.
 
 ## Requirements
 
@@ -51,6 +52,22 @@ java -jar target/et-otp-<version>.jar
 Replace `<version>` with the `<version>` in pom.xml (for example `2.0.0`).
 
 The settings are saved to `.et-otp.properties` in your home folder. To use another folder or file name, press "Change..." in the setup wizard, or "Move..." on the General tab of the settings. The chosen location is remembered in `.et-otp-location.properties` in your home folder and used on the next start. Without a chosen location, a `.et-otp.properties` in the working directory is used if it exists (same as et-otp 1.x). Help → About shows the full path. The language and the window position are saved to `.et-otp-ui.properties` in the same folder.
+
+## Get a code on the command line
+
+Started with `--code <name>`, et-otp-v2 writes the current code of the service without opening the window, so a batch file or script can use it where a 2-step verification code is needed. With the portable edition for Windows:
+
+```bat
+for /f "delims=" %%c in ('call "C:\tools\et-otp-v2\et-otp-v2.bat" --code AWS') do set MFA_CODE=%%c
+if not defined MFA_CODE exit /b 1
+```
+
+- The name is the name shown in et-otp-v2. If no service has exactly this name, the case is ignored. `--list` writes the names of the registered services.
+- If the services are protected with a password, you are asked for it; the password is not shown while you type. With protection for your Windows user, the code is written without a question.
+- If the code changes within 3 seconds, the next code is waited for and written.
+- Only the code goes to the standard output; the password prompt and errors go to the standard error output. The exit code is 0 when done, 1 when failed and 2 for wrong options.
+- The configuration file is only read, so this also works while the window is open. Files in the format of et-otp 1.x and et-otp-v2 2.0 cannot be read: open them once in the window to convert them first.
+- With the portable edition for macOS run `sh et-otp-v2.command --code AWS`, for Linux `sh et-otp-v2.sh --code AWS`, with the plain JAR `java -jar et-otp-v2-<version>.jar --code AWS`.
 
 ## Upgrading from et-otp 1.x and et-otp-v2 2.0
 

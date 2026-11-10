@@ -2,7 +2,7 @@
  * GUI.java - et-otp: GPL Java TOTP soft token by Bernd Eckenfels.
  * Modified 2026 by DISK0401 for et-otp-v2: package renamed, encryption moved to SecretStore, homepage changed,
  * config location, English/Japanese texts, setup wizard, window position, build information,
- * several accounts, QR code registration, Windows user protection, desktop shortcut.
+ * several accounts, QR code registration, Windows user protection, desktop shortcut, command line codes.
  */
 package net.disk0401.etotp;
 
@@ -169,11 +169,16 @@ public class GUI implements AccountRow.Actions
 
 
     /**
-     * Main method - does not honor any arguments (yet).
-     * @param args ignored
+     * Main method: opens the window, or with options (for example {@code --code <name>}) runs
+     * {@link CodeCommand} without a window.
+     * @param args the options of {@link CodeCommand}, or none
      */
     public static void main(String[] args)
     {
+        if (CodeCommand.handles(args)) {
+            System.exit(CodeCommand.main(args));
+            return;
+        }
         SwingUtilities.invokeLater(GUI::start);
     }
 
