@@ -20,11 +20,14 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 - Accepts Base32 secrets as used by the two-step verification of Google, Amazon, Dropbox, Microsoft and others.
 - Stores the secret encrypted with a password in `.et-otp.properties` (PBKDF2-HMAC-SHA256 and AES-256-GCM).
 - Copies the generated code to the clipboard.
+- The user interface is in English and Japanese. It is shown in Japanese if the language of the OS is Japanese, else in English, and can be switched on the General tab of the settings.
+- When started without a configuration file, a wizard guides through storing the secret.
+- The window opens where it was when the program was last closed.
 
 ## Requirements
 
 - Java 17 or later to run the plain JAR. The portable editions include Java.
-- Maven 3.6.3 or later to build.
+- Maven 3.9.0 or later to build.
 
 ## Download and run
 
@@ -47,7 +50,7 @@ java -jar target/et-otp-<version>.jar
 
 Replace `<version>` with the `<version>` in pom.xml (for example `2.0.0`).
 
-The settings are saved to `.et-otp.properties` in your home folder. If `.et-otp.properties` exists in the working directory, that file is used instead (same as et-otp 1.x). Help → About shows the full path.
+The settings are saved to `.et-otp.properties` in your home folder. If `.et-otp.properties` exists in the working directory, that file is used instead (same as et-otp 1.x). Help → About shows the full path. The language and the window position are saved to `.et-otp-ui.properties` in the same folder.
 
 ## Upgrading from et-otp 1.x
 

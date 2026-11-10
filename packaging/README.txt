@@ -9,8 +9,9 @@ How to start
 - Linux:   run in a terminal: sh et-otp-v2.sh
 
 Settings
-The settings are saved to .et-otp.properties in your home folder. To carry the settings
-with this folder (e.g. on a USB drive), follow the comment in the launcher file.
+The settings are saved to .et-otp.properties in your home folder, and the language and window
+position to .et-otp-ui.properties next to it. To carry the settings with this folder (e.g. on a
+USB drive), follow the comment in the launcher file.
 
 If you use this on a company or organization computer, check your organization's software
 policy first.
@@ -31,7 +32,7 @@ et-otp-v2 ポータブル版
 - Linux: ターミナルで sh et-otp-v2.sh を実行します。
 
 設定の保存先
-設定はホームフォルダの .et-otp.properties に保存されます。USB メモリなどで持ち運ぶ場合は、起動用のファイルの説明に従って、設定をこのフォルダに保存するように変えられます。
+設定はホームフォルダの .et-otp.properties に、言語とウィンドウの位置は同じフォルダの .et-otp-ui.properties に保存されます。USB メモリなどで持ち運ぶ場合は、起動用のファイルの説明に従って、設定をこのフォルダに保存するように変えられます。
 
 会社や組織のパソコンで使う場合は、ソフトウェアの利用について社内のルールを確かめてから使ってください。
 
