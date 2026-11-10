@@ -42,8 +42,10 @@ Java (Swing) で作ったデスクトップ用の TOTP ソフトトークンで�
 
 ```sh
 mvn verify
-java -jar target/et-otp-2.0-SNAPSHOT.jar
+java -jar target/et-otp-<バージョン>.jar
 ```
+
+`<バージョン>` は pom.xml の `<version>`（例: `2.0.0`）に置き換えてください。
 
 設定はホームフォルダの `.et-otp.properties` に保存されます。起動したときの作業フォルダに `.et-otp.properties` がある場合は、そちらを使います（et-otp 1.x と同じ動きです）。ファイルの場所は Help → About で確認できます。
 

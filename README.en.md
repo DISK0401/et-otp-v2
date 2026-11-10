@@ -42,8 +42,10 @@ The bundled Java executables are Amazon's original Corretto binaries with Amazon
 
 ```sh
 mvn verify
-java -jar target/et-otp-2.0-SNAPSHOT.jar
+java -jar target/et-otp-<version>.jar
 ```
+
+Replace `<version>` with the `<version>` in pom.xml (for example `2.0.0`).
 
 The settings are saved to `.et-otp.properties` in your home folder. If `.et-otp.properties` exists in the working directory, that file is used instead (same as et-otp 1.x). Help → About shows the full path.
 
