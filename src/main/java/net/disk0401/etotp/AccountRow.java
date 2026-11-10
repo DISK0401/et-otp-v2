@@ -20,7 +20,7 @@ import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
-import javax.swing.JProgressBar;
+import javax.swing.JComponent;
 import javax.swing.UIManager;
 
 
@@ -46,7 +46,7 @@ final class AccountRow extends JPanel
     private final JLabel nameLabel = new JLabel();
     private final JLabel codeLabel = new JLabel();
     private final JLabel nextLabel = new JLabel();
-    private final JProgressBar timeBar;
+    private final TimeBar timeBar;
     private long shownCounter = Long.MIN_VALUE;
     private String code = "";
 
@@ -76,10 +76,7 @@ final class AccountRow extends JPanel
             }
         });
         nextLabel.setForeground(Color.GRAY);
-        timeBar = new JProgressBar(0, account.period());
-        timeBar.setForeground(AppIcon.ACCENT);
-        timeBar.setBorderPainted(false);
-        timeBar.setPreferredSize(new java.awt.Dimension(10, 4));
+        timeBar = new TimeBar(account.period());
 
         JButton copy = new JButton(msg.get("row.copy"));
         copy.addActionListener(e -> actions.copy(account, code));
@@ -160,6 +157,44 @@ final class AccountRow extends JPanel
             nextLabel.setText(msg.format("row.next", group(account.totp(counter + 1))));
         }
         timeBar.setValue(account.secondsLeft(now));
+    }
+
+
+    /**
+     * The remaining time as a flat bar. JProgressBar is not used: the Windows look ignores its
+     * colors, and the basic look draws it in segments.
+     */
+    static final class TimeBar extends JComponent
+    {
+        private static final long serialVersionUID = 1L;
+        private static final Color TRACK = new Color(0xE0E0E0);
+        private final int max;
+        private int value;
+
+        TimeBar(int max)
+        {
+            this.max = max;
+            setPreferredSize(new java.awt.Dimension(10, 5));
+            // paints its whole area, so the parent need not be repainted
+            setOpaque(true);
+        }
+
+        void setValue(int value)
+        {
+            if (value != this.value) {
+                this.value = value;
+                repaint();
+            }
+        }
+
+        @Override
+        protected void paintComponent(java.awt.Graphics g)
+        {
+            g.setColor(TRACK);
+            g.fillRect(0, 0, getWidth(), getHeight());
+            g.setColor(AppIcon.ACCENT);
+            g.fillRect(0, 0, (int) ((long) getWidth() * value / max), getHeight());
+        }
     }
 
 
