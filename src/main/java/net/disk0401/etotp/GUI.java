@@ -66,7 +66,7 @@ public class GUI implements ActionListener
     private File configFile = ConfigLocation.resolve();
     private JLabel settingsFileLabel;
     private JLabel statusLabel;
-    /** status text when an et-otp 1.x configuration file was upgraded while unlocking, else empty. */
+    /** status text when upgrading an et-otp 1.x configuration file failed while unlocking, else empty. */
     private String migrationMessage = "";
 
 
@@ -410,10 +410,9 @@ public class GUI implements ActionListener
     {
         SecretStore.Result r = SecretStore.read(configFile, pass);
         if (r.isLegacy()) {
-            // best effort: a failed upgrade must not prevent showing the code
+            // silent upgrade; best effort: a failed upgrade must not prevent showing the code
             try {
-                File backup = SecretStore.migrate(configFile, r, pass);
-                migrationMessage = "Configuration upgraded to the et-otp-v2 format (old file kept as " + backup.getName() + ").";
+                SecretStore.migrate(configFile, r, pass);
             } catch (IOException | GeneralSecurityException e) {
                 migrationMessage = "Could not upgrade configuration: " + e.getMessage();
             }
