@@ -49,6 +49,10 @@ jobs:
             exit 1
           fi
           if [ "$DRY_RUN" != "true" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "::error::Releases can only be created from main (got $GITHUB_REF). Use a dry run for other branches."
+              exit 1
+            fi
             if [[ "$version" == *-SNAPSHOT ]]; then
               echo "::error::Cannot release a SNAPSHOT version ($version). Set the release version on develop first."
               exit 1

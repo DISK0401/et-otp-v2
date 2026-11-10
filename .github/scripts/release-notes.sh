@@ -24,7 +24,7 @@ if [ -z "$prev" ]; then
 fi
 range="${prev:-$first_base}..HEAD"
 
-log="$(git log --no-merges --format='- %s (%h, %an)' "$range" | head -n 300)"
+log="$(git log -n 300 --no-merges --format='- %s (%h, %an)' "$range")"
 if [ -z "$log" ]; then
   log="- (no changes)"
 fi
