@@ -64,6 +64,15 @@ final class UiSettings
     }
 
 
+    /** @return the same settings, to be saved in another file (after the configuration file moved) */
+    UiSettings copyTo(File other)
+    {
+        Properties p = new Properties();
+        p.putAll(props);
+        return new UiSettings(other, p);
+    }
+
+
     File file()
     {
         return file;
@@ -109,6 +118,7 @@ final class UiSettings
 
     void save() throws IOException
     {
+        AccountStore.checkNotAStore(file);
         AtomicFiles.store(props, file, "et-otp-v2 user interface settings");
     }
 }

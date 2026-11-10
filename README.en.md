@@ -21,7 +21,7 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 - Registers a service by reading the QR code shown on the screen; on Windows also from a window behind other windows. A QR code image file or the key typed in also works.
 - Stores the services encrypted in `.et-otp.properties`. On Windows, choose between protection for your Windows user (DPAPI, no password) and a password (PBKDF2-HMAC-SHA256 and AES-256-GCM); on macOS and Linux a password is used.
 - The user interface is in English and Japanese. It is shown in Japanese if the language of the OS is Japanese, else in English, and can be switched on the General tab of the settings.
-- When started without a configuration file, a setup wizard opens. It asks for the protection and, on Windows, can create a desktop shortcut.
+- When started without a configuration file, a setup wizard opens. It asks for the protection and the location of the configuration file and, on Windows, can create a desktop shortcut. You can also choose an existing configuration file and keep using it.
 - The window opens where it was when the program was last closed.
 
 ## Requirements
@@ -50,7 +50,7 @@ java -jar target/et-otp-<version>.jar
 
 Replace `<version>` with the `<version>` in pom.xml (for example `2.0.0`).
 
-The settings are saved to `.et-otp.properties` in your home folder. If `.et-otp.properties` exists in the working directory, that file is used instead (same as et-otp 1.x). Help → About shows the full path. The language and the window position are saved to `.et-otp-ui.properties` in the same folder.
+The settings are saved to `.et-otp.properties` in your home folder. To use another folder or file name, press "Change..." in the setup wizard, or "Move..." on the General tab of the settings. The chosen location is remembered in `.et-otp-location.properties` in your home folder and used on the next start. Without a chosen location, a `.et-otp.properties` in the working directory is used if it exists (same as et-otp 1.x). Help → About shows the full path. The language and the window position are saved to `.et-otp-ui.properties` in the same folder.
 
 ## Upgrading from et-otp 1.x and et-otp-v2 2.0
 

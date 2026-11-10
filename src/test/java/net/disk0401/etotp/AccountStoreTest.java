@@ -39,6 +39,30 @@ class AccountStoreTest
     }
 
     @Test
+    void configurationFilesAreNotReplacedBySettings() throws Exception
+    {
+        File store = new File(tmp, UiSettings.FILE_NAME);
+        Files.writeString(store.toPath(), "key.1.encoded=ABC\n");
+        File other = new File(tmp, "other.properties");
+        Files.writeString(other.toPath(), "language=ja\n");
+
+        assertThrows(IOException.class, () -> UiSettings.load(store).save());
+        assertThrows(IOException.class, () -> ConfigLocation.remember(store, new File(tmp, "x.properties")));
+        AccountStore.checkNotAStore(other);
+        AccountStore.checkNotAStore(new File(tmp, "missing.properties"));
+        assertEquals("key.1.encoded=ABC\n", Files.readString(store.toPath()));
+    }
+
+    @Test
+    void otherFilesAreNoConfigurationFiles() throws Exception
+    {
+        File f = new File(tmp, "notes.txt");
+        java.nio.file.Files.writeString(f.toPath(), "some = text\n");
+
+        assertThrows(IOException.class, () -> AccountStore.inspect(f));
+    }
+
+    @Test
     void missingFile() throws Exception
     {
         assertEquals(AccountStore.Kind.MISSING, AccountStore.inspect(new File(tmp, "none.properties")));

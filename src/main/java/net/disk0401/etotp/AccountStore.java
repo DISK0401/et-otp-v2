@@ -113,12 +113,39 @@ final class AccountStore
     private AccountStore() { }
 
 
+    /**
+     * Refuses to replace a configuration file with something else (the user interface settings or the location
+     * pointer have fixed names, which a configuration file chosen with -Detotp.config may also have).
+     *
+     * @throws IOException if the file holds registered services
+     */
+    static void checkNotAStore(File file) throws IOException
+    {
+        if (!file.isFile()) {
+            return;
+        }
+        Properties p = new Properties();
+        try (java.io.InputStream is = Files.newInputStream(file.toPath())) {
+            p.load(is);
+        } catch (IllegalArgumentException e) {
+            return; // not a properties file, so no configuration file either
+        }
+        if (p.getProperty(ENCODED) != null) {
+            throw new IOException("This file holds registered services and is not replaced: " + file);
+        }
+    }
+
+
     static Kind inspect(File file) throws IOException
     {
         if (!file.exists()) {
             return Kind.MISSING;
         }
         Properties p = SecretStore.load(Files.readAllBytes(file.toPath()));
+        if (p.getProperty(ENCODED) == null) {
+            // every format stores its encrypted data here; without it this is some other file
+            throw new IOException("Not an et-OTP configuration file (missing " + ENCODED + "): " + file);
+        }
         int version = SecretStore.formatVersion(p);
         if (version == 1 || version == SecretStore.CURRENT_VERSION) {
             return Kind.LEGACY;

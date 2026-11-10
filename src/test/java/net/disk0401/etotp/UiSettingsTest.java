@@ -65,6 +65,20 @@ class UiSettingsTest
     }
 
     @Test
+    void copyKeepsTheValuesInTheNewFile() throws Exception
+    {
+        UiSettings s = UiSettings.load(new File(tmp, UiSettings.FILE_NAME));
+        s.setLanguage(Messages.ENGLISH);
+        File other = new File(tmp, "other.properties");
+
+        UiSettings copy = s.copyTo(other);
+        copy.save();
+
+        assertEquals(other, copy.file());
+        assertEquals(Messages.ENGLISH, UiSettings.load(other).language());
+    }
+
+    @Test
     void invalidValuesAreIgnored() throws Exception
     {
         File f = new File(tmp, UiSettings.FILE_NAME);
