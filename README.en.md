@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/DISK0401/et-otp-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/DISK0401/et-otp-v2/actions/workflows/ci.yml)
 [![License: GPL-2.0-only](https://img.shields.io/github/license/DISK0401/et-otp-v2)](LICENSE)
-[![Java 17+](https://img.shields.io/badge/Java-17%2B-blue)](https://adoptium.net/)
+[![Java 25+](https://img.shields.io/badge/Java-25%2B-blue)](https://adoptium.net/)
 [![Website](https://img.shields.io/badge/website-disk0401.github.io-informational)](https://disk0401.github.io/et-otp-v2/)
 [![Last commit](https://img.shields.io/github/last-commit/DISK0401/et-otp-v2)](https://github.com/DISK0401/et-otp-v2/commits/main)
 
@@ -16,17 +16,17 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 
 ## Features
 
-- Generates one-time passwords according to RFC 6238 (TOTP) / RFC 4226 (HOTP).
-- Accepts Base32 secrets as used by the two-step verification of Google, Amazon, Dropbox, Microsoft and others.
-- Stores the secret encrypted with a password in `.et-otp.properties` (PBKDF2-HMAC-SHA256 and AES-256-GCM).
-- Copies the generated code to the clipboard.
+- Generates one-time passwords according to RFC 6238 (TOTP) and shows the next code and the remaining time. SHA-1, SHA-256 and SHA-512, 6 to 8 digits and any period are supported.
+- Holds any number of services. Click a code or press Copy to copy it to the clipboard.
+- Registers a service by reading the QR code shown on the screen; on Windows also from a window behind other windows. A QR code image file or the key typed in also works.
+- Stores the services encrypted in `.et-otp.properties`. On Windows, choose between protection for your Windows user (DPAPI, no password) and a password (PBKDF2-HMAC-SHA256 and AES-256-GCM); on macOS and Linux a password is used.
 - The user interface is in English and Japanese. It is shown in Japanese if the language of the OS is Japanese, else in English, and can be switched on the General tab of the settings.
-- When started without a configuration file, a wizard guides through storing the secret.
+- When started without a configuration file, a setup wizard opens. It asks for the protection and, on Windows, can create a desktop shortcut.
 - The window opens where it was when the program was last closed.
 
 ## Requirements
 
-- Java 17 or later to run the plain JAR. The portable editions include Java.
+- Java 25 or later to run the plain JAR. The portable editions include Java.
 - Maven 3.9.0 or later to build.
 
 ## Download and run
@@ -52,13 +52,14 @@ Replace `<version>` with the `<version>` in pom.xml (for example `2.0.0`).
 
 The settings are saved to `.et-otp.properties` in your home folder. If `.et-otp.properties` exists in the working directory, that file is used instead (same as et-otp 1.x). Help → About shows the full path. The language and the window position are saved to `.et-otp-ui.properties` in the same folder.
 
-## Upgrading from et-otp 1.x
+## Upgrading from et-otp 1.x and et-otp-v2 2.0
 
-et-otp-v2 reads the `.et-otp.properties` of the original et-otp. On the first unlock it copies the old file to `.et-otp.properties.v1.bak` and then re-writes it in the new format. See [Upgrading from et-otp 1.x](https://disk0401.github.io/et-otp-v2/#upgrade) for details.
+et-otp-v2 reads the `.et-otp.properties` of the original et-otp and of et-otp-v2 2.0. On the first unlock it copies the old file to `.et-otp.properties.v1.bak` (et-otp 1.x) or `.et-otp.properties.v2.bak` (et-otp-v2 2.0) and then re-writes it in the new format, which holds several services. See [Upgrading from et-otp 1.x](https://disk0401.github.io/et-otp-v2/#upgrade) for details.
 
 ## Main changes from upstream
 
-- Targets Java 17 and uses current Maven plugins.
+- Targets Java 25 and uses current Maven plugins.
+- Several services and registration by QR code.
 - Package renamed to `net.disk0401.etotp`.
 - Encryption changed to PBKDF2-HMAC-SHA256 and AES-256-GCM, with migration of old files.
 - Removed debug output that printed key material to stdout.
@@ -72,3 +73,5 @@ et-otp-v2 reads the `.et-otp.properties` of the original et-otp. On the first un
 
 Copyright (C) 2012-2020 Bernd Eckenfels (original author)  
 Copyright (C) 2026 DISK0401 (changes in this fork)
+
+The QR code decoder is a Java port of [quirc](https://github.com/dlbeer/quirc) by Daniel Beer (Copyright (C) 2010-2012 Daniel Beer, ISC license). The full license text is in the source files in `src/main/java/net/disk0401/etotp/qr` and in `META-INF/LICENSE-quirc.txt` in the jar.

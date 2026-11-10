@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/DISK0401/et-otp-v2/actions/workflows/ci.yml/badge.svg)](https://github.com/DISK0401/et-otp-v2/actions/workflows/ci.yml)
 [![License: GPL-2.0-only](https://img.shields.io/github/license/DISK0401/et-otp-v2)](LICENSE)
-[![Java 17+](https://img.shields.io/badge/Java-17%2B-blue)](https://adoptium.net/)
+[![Java 25+](https://img.shields.io/badge/Java-25%2B-blue)](https://adoptium.net/)
 [![Website](https://img.shields.io/badge/website-disk0401.github.io-informational)](https://disk0401.github.io/et-otp-v2/ja/)
 [![Last commit](https://img.shields.io/github/last-commit/DISK0401/et-otp-v2)](https://github.com/DISK0401/et-otp-v2/commits/main)
 
@@ -16,17 +16,17 @@ Java (Swing) で作ったデスクトップ用の TOTP ソフトトークンで�
 
 ## 機能
 
-- RFC 6238 (TOTP) / RFC 4226 (HOTP) に基づいてワンタイムパスワードを生成します。
-- Google、Amazon、Dropbox、Microsoft などの2段階認証で使われる Base32 形式のシークレットに対応しています。
-- シークレットはパスワードで暗号化して `.et-otp.properties` に保存します（PBKDF2-HMAC-SHA256 と AES-256-GCM）。
-- 生成したコードをクリップボードにコピーできます。
+- RFC 6238 (TOTP) に基づいてワンタイムパスワードを生成し、次のコードと残り時間もあわせて表示します。SHA-1、SHA-256、SHA-512、6〜8 桁、任意の更新間隔に対応しています。
+- 複数のサービスを登録できます。コードはクリックするか「コピー」を押すと、クリップボードにコピーできます。
+- 画面に表示した QR コードを読み取ってサービスを登録できます。Windows では、ほかのウィンドウの裏にあるウィンドウからも読み取れます。QR コードの画像ファイルや、キーの入力でも登録できます。
+- 登録したサービスは暗号化して `.et-otp.properties` に保存します。Windows では、Windows のユーザーで保護する方法（DPAPI、パスワード不要）と、パスワードで保護する方法（PBKDF2-HMAC-SHA256 と AES-256-GCM）を選べます。macOS と Linux では、パスワードで保護します。
 - 画面は日本語と英語に対応しています。OS の言語が日本語なら日本語、それ以外なら英語で表示します。設定画面の「全般」タブで切り替えることもできます。
-- 設定ファイルがない状態で起動すると、シークレットを登録するウィザードが開きます。
+- 設定ファイルがない状態で起動すると、初期設定のウィザードが開きます。保護方法を選べるほか、Windows ではデスクトップにショートカットを作れます。
 - 終了したときのウィンドウの位置を、次に起動したときに使います。
 
 ## 必要な環境
 
-- JAR だけを使う場合は、Java 17 以降が必要です。ポータブル版には Java を同梱しています。
+- JAR だけを使う場合は、Java 25 以降が必要です。ポータブル版には Java を同梱しています。
 - ビルドには Maven 3.9.0 以降が必要です。
 
 ## ダウンロードと起動
@@ -52,14 +52,15 @@ java -jar target/et-otp-<バージョン>.jar
 
 設定はホームフォルダの `.et-otp.properties` に保存されます。起動したときの作業フォルダに `.et-otp.properties` がある場合は、そちらを使います（et-otp 1.x と同じ動きです）。ファイルの場所は、ヘルプ → バージョン情報（英語表示では Help → About）で確認できます。言語とウィンドウの位置は、同じフォルダの `.et-otp-ui.properties` に保存されます。
 
-## et-otp 1.x からの移行
+## et-otp 1.x と et-otp-v2 2.0 からの移行
 
-元の et-otp の `.et-otp.properties` はそのまま読めます。最初にロックを解除したとき、古いファイルを `.et-otp.properties.v1.bak` にコピーしてから、新しい形式で書き直します。注意点は[移行の説明](https://disk0401.github.io/et-otp-v2/ja/#upgrade)を見てください。
+元の et-otp と et-otp-v2 2.0 の `.et-otp.properties` はそのまま読めます。最初にロックを解除したとき、古いファイルを `.et-otp.properties.v1.bak`（et-otp 1.x の場合）または `.et-otp.properties.v2.bak`（et-otp-v2 2.0 の場合）にコピーしてから、複数のサービスを登録できる新しい形式で書き直します。注意点は[移行の説明](https://disk0401.github.io/et-otp-v2/ja/#upgrade)を見てください。
 
 ## 上流からの主な変更点
 
-- ビルド対象を Java 17 に上げ、Maven プラグインを新しいバージョンにしました。
+- ビルド対象を Java 25 に上げ、Maven プラグインを新しいバージョンにしました。
 - パッケージ名を `net.disk0401.etotp` に変えました。
+- 複数のサービスの登録と、QR コードの読み取りに対応しました。
 - 暗号化の方式を PBKDF2-HMAC-SHA256 と AES-256-GCM に変え、古い形式のファイルを移行できるようにしました。
 - 鍵などの情報を標準出力に書き出していた処理を削除しました。
 - Java を同梱したポータブル版を、リリースのたびに作るようにしました。
@@ -72,3 +73,5 @@ java -jar target/et-otp-<バージョン>.jar
 
 Copyright (C) 2012-2020 Bernd Eckenfels（オリジナル作者）  
 Copyright (C) 2026 DISK0401（フォークでの変更）
+
+QR コードの解析には、Daniel Beer 氏の [quirc](https://github.com/dlbeer/quirc)（Copyright (C) 2010-2012 Daniel Beer、ISC ライセンス）を Java に移植したコードを使っています。ライセンスの全文は、`src/main/java/net/disk0401/etotp/qr` のソースファイルと、jar の中の `META-INF/LICENSE-quirc.txt` にあります。

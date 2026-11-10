@@ -14,7 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java: ['17', '25']
+        # Java 25 is the minimum (FFM API for Windows functions); keep the matrix for the job name build (25)
+        java: ['25']
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -25,9 +26,7 @@ jobs:
       - name: Build and test
         run: mvn -B -e verify
       - name: Check for APIs deprecated for removal
-        # The jar targets Java 17 (--release 17), so the compiler cannot see APIs that later
-        # Java versions deprecate for removal. Scan against the newest supported release.
-        if: matrix.java == '25'
+        # The compiler only warns about deprecations it is told about; scan the jar explicitly.
         run: |
           out="$(jdeprscan -J-Duser.language=en -J-Duser.country=US --release 25 --for-removal target/et-otp-*.jar 2>&1)"
           echo "$out"
@@ -36,7 +35,6 @@ jobs:
             exit 1
           fi
       - name: Upload jar
-        if: matrix.java == '25'
         uses: actions/upload-artifact@v7
         with:
           name: et-otp-jar

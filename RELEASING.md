@@ -13,7 +13,7 @@
 - Dependabot の PR は `develop` に向けて作られます。
 - `main` には次のルール（リポジトリのルールセット「main protection」）を設定しています。
   - PR を通さない更新、強制 push、ブランチの削除はできません。管理者も例外にしていません。
-  - CI（`build (17)`、`build (25)`）とリリースの確認（`release-check`）が通らないとマージできません。
+  - CI（`build (25)`）とリリースの確認（`release-check`）が通らないとマージできません。
   - マージの方法は「Create a merge commit」だけです。squash にすると `develop` と `main` の履歴が分かれ、次のリリースでコンフリクトするためです。
 
 ## リリースの流れ
@@ -38,7 +38,7 @@
    | `et-otp-v2-<バージョン>-windows-x64-portable.zip` | Windows。展開して `et-otp-v2.bat` をダブルクリックする |
    | `et-otp-v2-<バージョン>-macos-arm64-portable.tar.gz` | macOS（Apple シリコン）。展開して `et-otp-v2.command` をダブルクリックする |
    | `et-otp-v2-<バージョン>-linux-x64-portable.tar.gz` | Linux。展開して `sh et-otp-v2.sh` を実行する |
-   | `et-otp-v2-<バージョン>.jar` | Java 17 以降が入っている環境 |
+   | `et-otp-v2-<バージョン>.jar` | Java 25 以降が入っている環境 |
    | `SHA256SUMS.txt` | チェックサム |
 
 5. Draft の変更履歴（英語と日本語）を読み、必要なら直してから「Publish release」で公開します。公開したときに、マージしたコミットに `v<バージョン>` のタグが付きます。
