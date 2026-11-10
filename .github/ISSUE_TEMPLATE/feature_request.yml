@@ -1,0 +1,66 @@
+name: Feature request / 機能の要望
+description: Suggest a new feature or a change. / 新しい機能や変更を提案します。
+title: "[Feature]: "
+labels: ["enhancement", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the suggestion. Please describe the situation in which you need it, so the best way to solve it can be found.
+        提案ありがとうございます。どのような場面で必要なのかを書いてもらえると、よい解決方法を検討しやすくなります。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Situation / 困っていること
+      description: When do you need this, and what do you do now? / どのような場面で必要ですか？今はどうしていますか？
+      placeholder: "When I ..., I have to ... / ...するときに、毎回...する必要がある"
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution / 提案する内容
+      description: How should et-otp-v2 behave? / et-otp-v2 がどのように動くとよいですか？
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives / ほかに考えた方法
+      description: Other solutions or workarounds you considered. / 検討したほかの方法や、今使っている回避方法があれば書いてください。
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / 対象
+      multiple: true
+      options:
+        - Codes in the window / ウィンドウのコードの表示
+        - Registering a service (QR code, key) / サービスの登録（QR コード、キー）
+        - Protection and configuration file / 保護方法と設定ファイル
+        - Setup wizard and settings / 初期設定のウィザードと設定画面
+        - Command line / コマンドライン
+        - Installation and launchers / インストールと起動
+        - Documentation / ドキュメント
+        - Other / その他
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      description: The OS you need it on. / 必要な OS を選んでください。
+      multiple: true
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - All / すべて
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context / 補足
+      description: Examples or screenshots of other programs. Do not include keys, codes or QR codes. / ほかのプログラムの例やスクリーンショットなど。キー、認証コード、QR コードは含めないでください。

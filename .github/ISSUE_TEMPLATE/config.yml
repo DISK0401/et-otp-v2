@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation / 使い方の説明
+    url: https://disk0401.github.io/et-otp-v2/
+    about: How to install, register services and use the command line. / インストール、サービスの登録、コマンドラインの使い方を説明しています。

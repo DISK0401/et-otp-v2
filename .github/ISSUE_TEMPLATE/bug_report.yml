@@ -1,0 +1,117 @@
+name: Bug report / 不具合の報告
+description: Report something that does not work as expected. / 期待どおりに動かない点を報告します。
+title: "[Bug]: "
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. **Never post keys, codes, passwords, QR codes or configuration files** (`.et-otp.properties`), also not in screenshots.
+        報告ありがとうございます。**キー、認証コード、パスワード、QR コード、設定ファイル（`.et-otp.properties`）は、スクリーンショットも含めて絶対に貼らないでください。**
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened / 起きたこと
+      description: Describe the problem. Paste error messages as text. / 問題の内容を書いてください。エラーメッセージは文字で貼ってください。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 再現の手順
+      description: The steps that lead to the problem. / 問題が起きるまでの操作を順に書いてください。
+      placeholder: |
+        1. Start et-otp-v2 / et-otp-v2 を起動する
+        2. Press "..." / 「...」を押す
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 期待した動き
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version / バージョン
+      description: Shown in Help > About, or the file name of the download. / ヘルプ → バージョン情報か、ダウンロードしたファイル名で確認できます。
+      placeholder: "2.1.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other / その他
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version / OS のバージョン
+      placeholder: "Windows 11 24H2, macOS 15, Ubuntu 24.04"
+
+  - type: dropdown
+    id: edition
+    attributes:
+      label: Edition / 使っている形式
+      options:
+        - Portable edition / ポータブル版
+        - JAR only (own Java) / JAR だけ（自分で入れた Java）
+        - Built from source / ソースからビルド
+    validations:
+      required: true
+
+  - type: dropdown
+    id: usage
+    attributes:
+      label: Where it happens / 起きる場面
+      multiple: true
+      options:
+        - Setup wizard / 初期設定のウィザード
+        - Unlock / ロックの解除
+        - Codes in the window / ウィンドウのコードの表示
+        - Registering a service (QR code, key) / サービスの登録（QR コード、キー）
+        - Settings / 設定画面
+        - Command line (--code, --list) / コマンドライン（--code、--list）
+        - Desktop shortcut / デスクトップのショートカット
+        - Other / その他
+
+  - type: dropdown
+    id: protection
+    attributes:
+      label: Protection / 保護方法
+      options:
+        - Password / パスワード
+        - Windows user / Windows のユーザー
+        - Not set up yet / まだ設定していない
+        - Unknown / 分からない
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output / コンソールの出力
+      description: If you started it from a terminal, paste the output. Remove anything secret. / ターミナルから起動した場合は、出力を貼ってください。秘密の情報は消してください。
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks / 確認
+      options:
+        - label: I checked that the problem also happens with the latest release. / 最新のリリースでも起きることを確かめました。
+          required: true
+        - label: I did not include keys, codes, passwords, QR codes or configuration files. / キー、認証コード、パスワード、QR コード、設定ファイルを含めていません。
+          required: true
