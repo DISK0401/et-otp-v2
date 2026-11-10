@@ -3,3 +3,7 @@
 *.jpg binary
 *.png binary
 *.jar binary
+*.sh text eol=lf
+*.bat text eol=crlf
+*.command text eol=lf
+packaging/README.txt text eol=crlf

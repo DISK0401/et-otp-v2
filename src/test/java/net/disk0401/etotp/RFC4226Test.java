@@ -4,12 +4,12 @@
  */
 package net.disk0401.etotp;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 
 /**
@@ -17,10 +17,10 @@ import org.junit.Test;
  *
  * @author Bernd Eckenfels
  */
-public class RFC4226Test
+class RFC4226Test
 {
     @Test
-    public void testRFC4226() throws InvalidKeyException,
+    void testRFC4226() throws InvalidKeyException,
             NoSuchAlgorithmException {
         // Test Vector 0,1 and 9 from RFC 4226
         byte[] secretBytes = "12345678901234567890".getBytes();

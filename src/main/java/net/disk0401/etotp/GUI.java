@@ -1,6 +1,6 @@
 /*
  * GUI.java - et-otp: GPL Java TOTP soft token by Bernd Eckenfels.
- * Modified 2026 by DISK0401 for et-otp-v2: package renamed, encryption moved to SecretStore, homepage changed.
+ * Modified 2026 by DISK0401 for et-otp-v2: package renamed, encryption moved to SecretStore, homepage changed, config location.
  */
 package net.disk0401.etotp;
 
@@ -63,10 +63,10 @@ public class GUI implements ActionListener
     private JDialog aboutDialog;
     private JTextField settingsCode;
     private JPasswordField settingsPass;
-    private File configFile = new File(".et-otp.properties");
+    private File configFile = ConfigLocation.resolve();
     private JLabel settingsFileLabel;
     private JLabel statusLabel;
-    /** status text when an et-otp 1.x configuration file was upgraded while unlocking, else empty. */
+    /** status text when upgrading an et-otp 1.x configuration file failed while unlocking, else empty. */
     private String migrationMessage = "";
 
 
@@ -410,10 +410,9 @@ public class GUI implements ActionListener
     {
         SecretStore.Result r = SecretStore.read(configFile, pass);
         if (r.isLegacy()) {
-            // best effort: a failed upgrade must not prevent showing the code
+            // silent upgrade; best effort: a failed upgrade must not prevent showing the code
             try {
-                File backup = SecretStore.migrate(configFile, r, pass);
-                migrationMessage = "Configuration upgraded to the et-otp-v2 format (old file kept as " + backup.getName() + ").";
+                SecretStore.migrate(configFile, r, pass);
             } catch (IOException | GeneralSecurityException e) {
                 migrationMessage = "Could not upgrade configuration: " + e.getMessage();
             }

@@ -4,11 +4,12 @@
  */
 package net.disk0401.etotp;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -25,34 +26,33 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 
 /**
  * Tests for the encrypted configuration file, including et-otp 1.x compatibility.
  */
-public class SecretStoreTest
+class SecretStoreTest
 {
     private static final byte[] SECRET = "12345678901234567890".getBytes();
     /** Low iteration count to keep the tests fast. */
     private static final int TEST_ITERATIONS = 1000;
 
-    @Rule
-    public TemporaryFolder tmp = new TemporaryFolder();
+    @TempDir
+    File tmp;
 
     private File file;
 
-    @Before
-    public void setUp()
+    @BeforeEach
+    void setUp()
     {
-        file = new File(tmp.getRoot(), ".et-otp.properties");
+        file = new File(tmp, ".et-otp.properties");
     }
 
     @Test
-    public void currentFormatRoundTrip() throws Exception
+    void currentFormatRoundTrip() throws Exception
     {
         SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
 
@@ -67,32 +67,34 @@ public class SecretStoreTest
     }
 
     @Test
-    public void defaultIterationsMeetCurrentRecommendation() throws Exception
+    void defaultIterationsMeetCurrentRecommendation() throws Exception
     {
         assertTrue(SecretStore.DEFAULT_ITERATIONS >= 600000);
     }
 
-    @Test(expected = BadPaddingException.class)
-    public void currentFormatWrongPasswordIsRejected() throws Exception
+    @Test
+    void currentFormatWrongPasswordIsRejected() throws Exception
     {
-        SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
+            SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
+    
 
-        SecretStore.read(file, "wrong".toCharArray());
-    }
-
-    @Test(expected = GeneralSecurityException.class)
-    public void tamperedParametersAreRejected() throws Exception
-    {
-        SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
-        Properties p = load(file);
-        p.setProperty("key.1.iterations", "1001");
-        store(p, file);
-
-        SecretStore.read(file, "pass".toCharArray());
+        assertThrows(BadPaddingException.class, () -> SecretStore.read(file, "wrong".toCharArray()));
     }
 
     @Test
-    public void saltAndIvAreRandomPerWrite() throws Exception
+    void tamperedParametersAreRejected() throws Exception
+    {
+            SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
+            Properties p = load(file);
+            p.setProperty("key.1.iterations", "1001");
+            store(p, file);
+    
+
+        assertThrows(GeneralSecurityException.class, () -> SecretStore.read(file, "pass".toCharArray()));
+    }
+
+    @Test
+    void saltAndIvAreRandomPerWrite() throws Exception
     {
         SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
         Properties first = load(file);
@@ -104,7 +106,7 @@ public class SecretStoreTest
     }
 
     @Test
-    public void legacyFileIsReadable() throws Exception
+    void legacyFileIsReadable() throws Exception
     {
         writeLegacy(file, SECRET, "pass".toCharArray());
 
@@ -115,7 +117,7 @@ public class SecretStoreTest
     }
 
     @Test
-    public void legacyFileCanBeMigrated() throws Exception
+    void legacyFileCanBeMigrated() throws Exception
     {
         writeLegacy(file, SECRET, "pass".toCharArray());
         SecretStore.Result legacy = SecretStore.read(file, "pass".toCharArray());
@@ -129,7 +131,7 @@ public class SecretStoreTest
     }
 
     @Test
-    public void migrateKeepsBackupOfLegacyFile() throws Exception
+    void migrateKeepsBackupOfLegacyFile() throws Exception
     {
         writeLegacy(file, SECRET, "pass".toCharArray());
         byte[] original = java.nio.file.Files.readAllBytes(file.toPath());
@@ -144,7 +146,7 @@ public class SecretStoreTest
     }
 
     @Test
-    public void migrateNeverOverwritesExistingBackup() throws Exception
+    void migrateNeverOverwritesExistingBackup() throws Exception
     {
         File backup = new File(file.getPath() + ".v1.bak");
         writeLegacy(backup, SECRET, "first".toCharArray());
@@ -157,16 +159,151 @@ public class SecretStoreTest
     }
 
     @Test
-    public void writeLeavesNoTemporaryFiles() throws Exception
+    void migrateKeepsOriginalWhenOtherBackupExists() throws Exception
+    {
+        File backup = new File(file.getPath() + ".v1.bak");
+        writeLegacy(backup, SECRET, "first".toCharArray());
+        writeLegacy(file, SECRET, "pass".toCharArray());
+        byte[] original = java.nio.file.Files.readAllBytes(file.toPath());
+
+        File used = SecretStore.migrate(file, SecretStore.read(file, "pass".toCharArray()), "pass".toCharArray());
+
+        assertEquals(file.getName() + ".v1.bak.1", used.getName());
+        assertArrayEquals(original, java.nio.file.Files.readAllBytes(used.toPath()));
+    }
+
+    @Test
+    void migrateReusesIdenticalBackup() throws Exception
+    {
+        writeLegacy(file, SECRET, "pass".toCharArray());
+        java.nio.file.Files.copy(file.toPath(), new File(file.getPath() + ".v1.bak").toPath());
+
+        File used = SecretStore.migrate(file, SecretStore.read(file, "pass".toCharArray()), "pass".toCharArray());
+
+        assertEquals(file.getName() + ".v1.bak", used.getName());
+        assertEquals(2, tmp.list().length);
+    }
+
+    @Test
+    void migrateAbortsWhenFileChangedAfterRead() throws Exception
+    {
+        writeLegacy(file, SECRET, "pass".toCharArray());
+        SecretStore.Result legacy = SecretStore.read(file, "pass".toCharArray());
+        SecretStore.write(file, SECRET, "other".toCharArray(), TEST_ITERATIONS);
+        byte[] saved = java.nio.file.Files.readAllBytes(file.toPath());
+
+        assertThrows(IOException.class, () -> SecretStore.migrate(file, legacy, "pass".toCharArray()));
+        assertArrayEquals(saved, java.nio.file.Files.readAllBytes(file.toPath()));
+    }
+
+    @Test
+    void currentFormatWithoutVersionIsNotReadAsLegacy() throws Exception
+    {
+        SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
+        Properties p = load(file);
+        p.remove("key.1.version");
+        store(p, file);
+
+        assertThrows(IOException.class, () -> SecretStore.read(file, "pass".toCharArray()));
+    }
+
+    @Test
+    void excessiveIterationsAreRejectedBeforeKeyDerivation() throws Exception
+    {
+        SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
+        Properties p = load(file);
+        p.setProperty("key.1.iterations", Integer.toString(Integer.MAX_VALUE));
+        store(p, file);
+
+        assertThrows(IOException.class, () -> SecretStore.read(file, "pass".toCharArray()));
+    }
+
+    @Test
+    void malformedSaltIsReportedAsConfigurationError() throws Exception
+    {
+        SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
+        Properties p = load(file);
+        p.setProperty("key.1.salt", "A");
+        store(p, file);
+
+        assertThrows(IOException.class, () -> SecretStore.read(file, "pass".toCharArray()));
+    }
+
+    @Test
+    void iterationLimitIsInclusive() throws Exception
+    {
+        SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
+        Properties p = load(file);
+        p.setProperty("key.1.iterations", Integer.toString(SecretStore.MAX_ITERATIONS + 1));
+        store(p, file);
+
+        IOException e = assertThrows(IOException.class, () -> SecretStore.read(file, "pass".toCharArray()));
+        assertTrue(e.getMessage().contains(Integer.toString(SecretStore.MAX_ITERATIONS + 1)));
+    }
+
+    @Test
+    void wrongIvLengthIsReportedAsConfigurationError() throws Exception
+    {
+        SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
+        Properties p = load(file);
+        p.setProperty("key.1.iv", Base32.encode(new byte[16]));
+        store(p, file);
+
+        assertThrows(IOException.class, () -> SecretStore.read(file, "pass".toCharArray()));
+    }
+
+    @Test
+    void truncatedCiphertextIsReportedAsConfigurationError() throws Exception
+    {
+        SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
+        Properties p = load(file);
+        p.setProperty("key.1.encoded", Base32.encode(new byte[16]));
+        store(p, file);
+
+        assertThrows(IOException.class, () -> SecretStore.read(file, "pass".toCharArray()));
+    }
+
+    @Test
+    void legacyCiphertextMustBeWholeBlocks() throws Exception
+    {
+        writeLegacy(file, SECRET, "pass".toCharArray());
+        Properties p = load(file);
+        p.setProperty("key.1.encoded", Base32.encode(new byte[17]));
+        store(p, file);
+
+        assertThrows(IOException.class, () -> SecretStore.read(file, "pass".toCharArray()));
+    }
+
+    @Test
+    void malformedUnicodeEscapeIsReportedAsConfigurationError() throws Exception
+    {
+        java.nio.file.Files.write(file.toPath(), "key.1.salt=\\uZZZZ\n".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+
+        assertThrows(IOException.class, () -> SecretStore.read(file, "pass".toCharArray()));
+    }
+
+    @Test
+    void malformedLegacySaltIsReportedAsConfigurationError() throws Exception
+    {
+        writeLegacy(file, SECRET, "pass".toCharArray());
+        Properties p = load(file);
+        p.setProperty("key.1.salt", "A");
+        store(p, file);
+
+        assertThrows(IOException.class, () -> SecretStore.read(file, "pass".toCharArray()));
+    }
+
+    @Test
+    void writeLeavesNoTemporaryFiles() throws Exception
     {
         SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
         SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
 
-        assertEquals(1, tmp.getRoot().list().length);
+        assertEquals(1, tmp.list().length);
     }
 
     @Test
-    public void unsupportedVersionIsRejected() throws Exception
+    void unsupportedVersionIsRejected() throws Exception
     {
         SecretStore.write(file, SECRET, "pass".toCharArray(), TEST_ITERATIONS);
         Properties p = load(file);
@@ -182,7 +319,7 @@ public class SecretStoreTest
     }
 
     @Test
-    public void incompleteFileIsRejected() throws Exception
+    void incompleteFileIsRejected() throws Exception
     {
         Properties p = new Properties();
         p.setProperty("key.1.name", "test");

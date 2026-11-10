@@ -42,9 +42,19 @@
 
   <section id="install">
     <h2>Install and run</h2>
-    <p>et-otp-v2 needs Java 17 or later. Download the JAR from the <a href="https://github.com/DISK0401/et-otp-v2/releases">Releases page</a>, copy it to a writable folder and start it:</p>
-    <pre><code>java -jar et-otp-2.0.jar</code></pre>
-    <p>To build it yourself, run <code>mvn verify</code> and use <code>target/et-otp-2.0-SNAPSHOT.jar</code>.</p>
+    <p>Download the portable edition for your OS from the <a href="https://github.com/DISK0401/et-otp-v2/releases">Releases page</a>. It bundles a Java runtime built from Amazon Corretto 25 (LTS), so no installation and no administrator rights are needed.</p>
+    <div class="table-scroll">
+      <table>
+        <tr><th>OS</th><th>File</th><th>How to start</th></tr>
+        <tr><td>Windows</td><td><code>et-otp-v2-&lt;version&gt;-windows-x64-portable.zip</code></td><td>Extract it and double-click <code>et-otp-v2.bat</code>.</td></tr>
+        <tr><td>macOS (Apple silicon)</td><td><code>et-otp-v2-&lt;version&gt;-macos-arm64-portable.tar.gz</code></td><td>Extract it and double-click <code>et-otp-v2.command</code>. If it does not start, run <code>sh et-otp-v2.command</code> in Terminal.</td></tr>
+        <tr><td>Linux</td><td><code>et-otp-v2-&lt;version&gt;-linux-x64-portable.tar.gz</code></td><td>Extract it and run <code>sh et-otp-v2.sh</code> in a terminal.</td></tr>
+      </table>
+    </div>
+    <p>The bundled Java executables are Amazon's original Corretto binaries with Amazon's signatures. On a company or organization computer, check your organization's software policy first.</p>
+    <p>With Java 17 or later installed, you can also use the plain JAR:</p>
+    <pre><code>java -jar et-otp-v2-&lt;version&gt;.jar</code></pre>
+    <p>To build it yourself, run <code>mvn verify</code> and use the JAR in the <code>target</code> folder.</p>
   </section>
 
   <section id="setup">
@@ -54,7 +64,7 @@
       <li>In et-otp-v2, open <b>et-OTP v2 → Settings</b>, paste the Base32 code and choose an unlock password, then press <b>Save</b>.</li>
       <li>Enter the unlock password in the main window and press <b>Calc</b> (or Enter). Type the shown code into the service to confirm the setup.</li>
     </ol>
-    <p>The settings are saved to <code>.et-otp.properties</code> in the current working directory. <b>Help → About</b> shows the full path.</p>
+    <p>The settings are saved to <code>.et-otp.properties</code> in your home folder. If <code>.et-otp.properties</code> exists in the working directory, that file is used instead (same as et-otp 1.x). <b>Help → About</b> shows the full path.</p>
   </section>
 
   <section id="upgrade">
