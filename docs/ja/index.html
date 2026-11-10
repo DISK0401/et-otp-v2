@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>et-otp-v2 – デスクトップ用 TOTP ソフトトークン</title>
-  <meta name="description" content="et-otp-v2 は Java で作ったデスクトップ用の TOTP（RFC 6238）ソフトトークンです。ecki/et-otp を引き継いで保守しています。">
+  <meta name="description" content="et-otp-v2 は Java で作ったデスクトップ用の TOTP（RFC 6238）ソフトトークンです。ecki/et-otp を引き継いで開発しています。">
   <link rel="stylesheet" href="../style.css">
   <link rel="alternate" hreflang="en" href="../">
 </head>
@@ -27,7 +27,7 @@
       <a class="button" href="https://github.com/DISK0401/et-otp-v2/releases">ダウンロード</a>
       <a class="button secondary" href="https://github.com/DISK0401/et-otp-v2">ソースコード</a>
     </div>
-    <img src="../images/screenshot.jpg" width="270" height="225" alt="et-OTP のメイン画面。ロック解除用のパスワード欄、今のコード、次のコードが表示されている">
+    <img src="../images/screenshot.jpg" width="270" height="225" alt="et-OTP-v2 のメイン画面。ロック解除用のパスワード欄、今のコード、次のコードが表示されている">
   </div>
 
   <section id="features">
@@ -61,11 +61,11 @@
     <h2>トークンの設定</h2>
     <ol>
       <li>サービスの2段階認証の設定画面で、QR コードの代わりにシークレットをテキストで表示する方法を選びます。</li>
-      <li>et-otp-v2 を起動します。初めて起動したときは初期設定のウィザードが開くので、Base32 のコードを貼り付けて、ロック解除用のパスワードを決めます。あとから登録したり登録し直したりする場合は、<b>et-OTP v2 → 設定</b> を開き、<b>保存</b> を押します。</li>
+      <li>et-otp-v2 を起動します。初めて起動したときは初期設定のウィザードが開くので、Base32 のコードを貼り付けて、ロック解除用のパスワードを決めます。あとから登録したり登録し直したりする場合は、<b>et-OTP-v2 → 設定</b> を開き、<b>保存</b> を押します。</li>
       <li>メイン画面にロック解除用のパスワードを入力して <b>表示</b> を押します（Enter キーでも同じです）。表示されたコードをサービスに入力し、設定を完了します。</li>
     </ol>
     <p>設定はホームフォルダの <code>.et-otp.properties</code> に保存されます。起動したときの作業フォルダに <code>.et-otp.properties</code> がある場合は、そちらを使います（et-otp 1.x と同じ動きです）。ファイルの場所は <b>ヘルプ → バージョン情報</b> で確認できます。言語とウィンドウの位置は、同じフォルダの <code>.et-otp-ui.properties</code> に保存されます。</p>
-    <p>画面の言語は OS の設定に合わせます。OS の言語が日本語なら日本語、それ以外なら英語で表示します。切り替える場合は、<b>et-OTP v2 → 設定</b> を開き、<b>全般</b> タブで言語を選びます。</p>
+    <p>画面の言語は OS の設定に合わせます。OS の言語が日本語なら日本語、それ以外なら英語で表示します。切り替える場合は、<b>et-OTP-v2 → 設定</b> を開き、<b>全般</b> タブで言語を選びます。</p>
   </section>
 
   <section id="upgrade">
@@ -89,7 +89,7 @@
   <section id="license">
     <h2>ライセンスとクレジット</h2>
     <p>et-otp-v2 は <a href="https://github.com/DISK0401/et-otp-v2/blob/main/LICENSE">GNU General Public License v2.0 only</a> で公開しているフリーソフトウェアです。</p>
-    <p>Bernd Eckenfels 氏の <a href="https://github.com/ecki/et-otp">et-otp</a> を引き継いで保守しています。RFC 4226 にある HOTP の参照実装と、Google Authenticator プロジェクトの Base32 実装のコードを含みます。</p>
+    <p>Bernd Eckenfels 氏の <a href="https://github.com/ecki/et-otp">et-otp</a> を引き継いで開発しています。RFC 4226 にある HOTP の参照実装と、Google Authenticator プロジェクトの Base32 実装のコードを含みます。</p>
   </section>
 </main>
 

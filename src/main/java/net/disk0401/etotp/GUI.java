@@ -62,12 +62,12 @@ import net.disk0401.etotp.Base32.DecodingException;
 
 
 /**
- * et-OTP GUI main class.
+ * et-OTP-v2 GUI main class.
  */
 public class GUI implements ActionListener
 {
     private static final String HELPURL = "https://disk0401.github.io/et-otp-v2/";
-    static final String PROGNAME = "et-OTP v2";
+    static final String PROGNAME = "et-OTP-v2";
     /** Sample code that defines the width of the code fields, so they do not grow when filled. */
     static final String CODE_SAMPLE = "000000";
 
