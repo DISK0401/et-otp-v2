@@ -33,7 +33,12 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
+import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -47,6 +52,7 @@ import java.util.concurrent.ExecutionException;
 import javax.crypto.BadPaddingException;
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
@@ -94,8 +100,16 @@ public class GUI implements AccountRow.Actions
 
     private static final String[] LANGUAGES = { Messages.AUTO, Messages.ENGLISH, Messages.JAPANESE };
 
-    private final File configFile;
-    private final UiSettings uiSettings;
+    /** the configuration file; it changes when the user chooses another location. */
+    private File configFile;
+    /** the configuration file at the start, before the setup wizard chose another location. */
+    private final File startFile;
+    /**
+     * set when the setup wizard chose an existing file: its location is only remembered once it was opened,
+     * so a file that cannot be opened is not used again at the next start.
+     */
+    private File pendingLocationFrom;
+    private UiSettings uiSettings;
     /** display locale of the operating system, used for the automatic language setting. */
     private final Locale systemLocale;
     private Messages msg;
@@ -110,10 +124,18 @@ public class GUI implements AccountRow.Actions
     /** why the account list cannot be changed (see {@link AccountStore.Opened#readOnlyReason}), else null. */
     private String readOnlyReason;
     /** prevents a second instance with the same configuration file; held until the program ends. */
-    @SuppressWarnings("unused")
-    private static java.nio.channels.FileLock instanceLock;
+    private static FileLock instanceLock;
     /** why the instance lock could not be created; the account list is then opened read-only. */
     private static String lockProblem;
+    /** the folder of the configuration file does not exist (for example a removed USB drive): nothing is locked. */
+    private static boolean folderMissing;
+    /** creates and updates desktop shortcuts one after the other, so an older update cannot win. */
+    private static final java.util.concurrent.ExecutorService SHORTCUTS =
+        java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "et-otp-shortcut");
+            t.setDaemon(true);
+            return t;
+        });
 
     // main window
     private JFrame frame;
@@ -123,6 +145,8 @@ public class GUI implements AccountRow.Actions
     private JLabel setupLabel;
     private JButton setupButton;
     private JPasswordField passwordField;
+    /** on the unlock card: back to the setup, if the setup wizard chose the file. */
+    private JButton otherFileButton;
     private JPanel listPanel;
     private final List<AccountRow> rows = new ArrayList<>();
     private final List<JButton> addButtons = new ArrayList<>();
@@ -131,11 +155,14 @@ public class GUI implements AccountRow.Actions
 
     private JDialog settingsDialog;
     private JDialog aboutDialog;
+    /** the configuration file in the settings dialog, updated when the file was moved. */
+    private JTextArea settingsPath;
 
 
     private GUI(File configFile, UiSettings uiSettings, Locale systemLocale)
     {
         this.configFile = configFile;
+        this.startFile = configFile;
         this.uiSettings = uiSettings;
         this.systemLocale = systemLocale;
     }
@@ -158,7 +185,9 @@ public class GUI implements AccountRow.Actions
         GUI gui = new GUI(config, UiSettings.load(UiSettings.locationFor(config)),
                           Locale.getDefault(Locale.Category.DISPLAY));
         gui.applyLanguage();
-        if (!lockInstance(config)) {
+        File folder = config.getAbsoluteFile().getParentFile();
+        folderMissing = folder == null || !folder.isDirectory();
+        if (!folderMissing && !lockInstance(config)) {
             JOptionPane.showMessageDialog(null, gui.msg.format("error.running", config.getAbsolutePath()),
                                           PROGNAME, JOptionPane.INFORMATION_MESSAGE);
             System.exit(0);
@@ -184,20 +213,54 @@ public class GUI implements AccountRow.Actions
     private static boolean lockInstance(File config)
     {
         try {
-            File lockFile = new File(config.getAbsolutePath() + ".lock");
-            java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(lockFile.toPath(),
-                java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.WRITE);
-            instanceLock = ch.tryLock();
-            if (instanceLock == null) {
-                ch.close();
-                return false;
-            }
-            return true;
-        } catch (java.nio.channels.OverlappingFileLockException e) {
-            return false;
+            instanceLock = tryLock(config);
+            return instanceLock != null;
         } catch (IOException e) {
             lockProblem = e.toString();
             return true;
+        }
+    }
+
+
+    /** @return the lock of {@code <config>.lock}, or null if another instance holds it */
+    private static FileLock tryLock(File config) throws IOException
+    {
+        FileChannel ch = FileChannel.open(lockFile(config).toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try {
+            FileLock lock = ch.tryLock();
+            if (lock == null) {
+                ch.close();
+            }
+            return lock;
+        } catch (OverlappingFileLockException e) {
+            ch.close();
+            return null;
+        } catch (IOException | RuntimeException e) {
+            ch.close();
+            throw e;
+        }
+    }
+
+
+    private static File lockFile(File config)
+    {
+        return new File(config.getAbsolutePath() + ".lock");
+    }
+
+
+    /**
+     * Releases a lock. The lock file is kept: deleting it could let two other instances lock different files
+     * of the same name (one already opened, one new).
+     */
+    private static void releaseLock(FileLock lock)
+    {
+        if (lock == null) {
+            return;
+        }
+        try {
+            lock.channel().close();
+        } catch (IOException ignored) {
+            // nothing more to release
         }
     }
 
@@ -233,8 +296,7 @@ public class GUI implements AccountRow.Actions
         try {
             kind = AccountStore.inspect(configFile);
         } catch (IOException e) {
-            showCard(CARD_UNLOCK);
-            setStatus(msg.format("error.load", e.getMessage()), true);
+            openFailed(e);
             return;
         }
         switch (kind) {
@@ -246,21 +308,39 @@ public class GUI implements AccountRow.Actions
                 try {
                     opened(AccountStore.openForWindowsUser(configFile));
                 } catch (IOException e) {
-                    showCard(CARD_SETUP);
-                    setupButton.setVisible(false);
-                    setupLabel.setText(" ");
-                    setStatus(msg.format("error.load", e.getMessage()), true);
+                    openFailed(e);
                 }
                 break;
             default:
+                otherFileButton.setVisible(pendingLocationFrom != null);
                 showCard(CARD_UNLOCK);
                 break;
         }
     }
 
 
+    /**
+     * The file cannot be opened. If the setup wizard chose it, the setup can be run again to choose another
+     * file; else the error is only shown (the file must not be replaced by a new one).
+     */
+    private void openFailed(IOException e)
+    {
+        showCard(CARD_SETUP);
+        boolean chosen = pendingLocationFrom != null;
+        setupButton.setVisible(chosen);
+        setupLabel.setText(chosen ? msg.get("setup.text") : " ");
+        setStatus(msg.format("error.load", e.getMessage()), true);
+    }
+
+
     private void opened(AccountStore.Opened o)
     {
+        if (pendingLocationFrom != null) {
+            File from = pendingLocationFrom;
+            pendingLocationFrom = null;
+            otherFileButton.setVisible(false);
+            locationChosen(from, false);
+        }
         accounts.clear();
         accounts.addAll(o.accounts);
         protection = o.protection;
@@ -346,19 +426,39 @@ public class GUI implements AccountRow.Actions
 
     private void showSetupWizard()
     {
-        if (lockProblem != null) {
-            setStatus(msg.format("status.readOnly", lockProblem), true);
-            return;
+        // without a lock (lockProblem or folderMissing) the file chosen in the wizard is locked before it is used,
+        // see the switchTo call below: so another location can be chosen if this one cannot be written
+        if (folderMissing) {
+            JOptionPane.showMessageDialog(frame, msg.format("location.folderMissing", configFile.getAbsolutePath()),
+                                          PROGNAME, JOptionPane.WARNING_MESSAGE);
         }
-        SetupWizard wizard = new SetupWizard(frame, msg, configFile);
+        SetupWizard wizard = new SetupWizard(frame, msg, pendingLocationFrom != null ? pendingLocationFrom : configFile);
         wizard.setLocationRelativeTo(frame);
         wizard.setVisible(true);
         SetupWizard.Result r = wizard.result();
         if (r == null) {
+            if (CARD_UNLOCK.equals(card)) {
+                return; // started from the unlock card ("choose another file"): keep unlocking the chosen file
+            }
             showCard(CARD_SETUP);
             setStatus(msg.get("status.setupLater"), false);
             return;
         }
+        // compared with the file of the start: an earlier, failed setup may already have switched the file
+        File oldFile = startFile;
+        // nothing is locked yet if the folder was missing at the start
+        if ((instanceLock == null || !sameFile(r.configFile, configFile)) && !switchTo(r.configFile, r.useExisting)) {
+            clear(r.password);
+            showCard(CARD_SETUP);
+            return;
+        }
+        if (r.useExisting) {
+            // a configuration file that already exists: open it like at the start
+            pendingLocationFrom = oldFile;
+            open();
+            return;
+        }
+        pendingLocationFrom = null;
         SecretStore.PasswordKey newKey = null;
         try {
             if (r.protection == AccountStore.Protection.PASSWORD) {
@@ -368,9 +468,7 @@ public class GUI implements AccountRow.Actions
             setStatus(msg.format("error.crypto", e), true);
             return;
         } finally {
-            if (r.password != null) {
-                Arrays.fill(r.password, '\0');
-            }
+            clear(r.password);
         }
         accounts.clear();
         protection = r.protection;
@@ -391,9 +489,287 @@ public class GUI implements AccountRow.Actions
         opened = true;
         rebuildList();
         showCard(CARD_LIST);
+        locationChosen(oldFile, r.shortcut);
         if (r.shortcut) {
             createShortcut();
         }
+    }
+
+
+    private static void clear(char[] c)
+    {
+        if (c != null) {
+            Arrays.fill(c, '\0');
+        }
+    }
+
+
+    // --- location of the configuration file ---
+
+    /**
+     * Uses another configuration file (chosen in the setup wizard, nothing is opened yet): locks it and
+     * releases the lock of the old one.
+     *
+     * @param existing true for an existing file: like at the start, it is opened read-only if it cannot be
+     *        locked (for example in a read-only folder)
+     * @return false if it cannot be used (an error dialog was shown)
+     */
+    private boolean switchTo(File newFile, boolean existing)
+    {
+        FileLock newLock;
+        String problem = null;
+        if (existing) {
+            try {
+                newLock = tryLock(newFile);
+                if (newLock == null) {
+                    JOptionPane.showMessageDialog(frame, msg.format("error.running", newFile.getAbsolutePath()),
+                                                  PROGNAME, JOptionPane.WARNING_MESSAGE);
+                    return false;
+                }
+            } catch (IOException | RuntimeException e) {
+                newLock = null;
+                problem = e.toString();
+            }
+        } else {
+            newLock = lockOrShowError(newFile);
+            if (newLock == null) {
+                return false;
+            }
+        }
+        releaseLock(instanceLock);
+        instanceLock = newLock;
+        lockProblem = problem;
+        folderMissing = false;
+        useFile(newFile);
+        return true;
+    }
+
+
+    /** @return the lock of the file, or null if it cannot be locked (an error dialog was shown) */
+    private FileLock lockOrShowError(File file)
+    {
+        Component parent = settingsDialog != null && settingsDialog.isShowing() ? settingsDialog : frame;
+        try {
+            FileLock lock = tryLock(file);
+            if (lock == null) {
+                JOptionPane.showMessageDialog(parent, msg.format("error.running", file.getAbsolutePath()),
+                                              PROGNAME, JOptionPane.WARNING_MESSAGE);
+            }
+            return lock;
+        } catch (IOException | RuntimeException e) {
+            JOptionPane.showMessageDialog(parent, msg.format("error.location", e.getMessage()),
+                                          PROGNAME, JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
+    }
+
+
+    /** Changes the file in use; the user interface settings are saved next to it from now on. */
+    private void useFile(File newFile)
+    {
+        configFile = newFile.getAbsoluteFile();
+        uiSettings = uiSettings.copyTo(UiSettings.locationFor(configFile));
+        try {
+            uiSettings.save();
+        } catch (IOException ignored) {
+            // the language and the window position are conveniences, see saveWindowLocation
+        }
+        if (aboutDialog != null) {
+            aboutDialog.dispose();
+            aboutDialog = null;
+        }
+        if (settingsPath != null) {
+            settingsPath.setText(configFile.getAbsolutePath());
+            packWrapped(settingsDialog);
+        }
+    }
+
+
+    /**
+     * After the configuration file was moved or another one was chosen: remembers the location for the next
+     * start and updates the desktop shortcut that opened the old file.
+     *
+     * @param newShortcut true if a new shortcut is created anyway
+     */
+    private void locationChosen(File oldFile, boolean newShortcut)
+    {
+        if (sameFile(oldFile, configFile)) {
+            return;
+        }
+        Component parent = settingsDialog != null && settingsDialog.isShowing() ? settingsDialog : frame;
+        try {
+            ConfigLocation.remember(ConfigLocation.pointerFile(ConfigLocation.homeDir()), configFile);
+        } catch (IOException | RuntimeException e) {
+            JOptionPane.showMessageDialog(parent, msg.format("error.remember", e.getMessage()),
+                                          PROGNAME, JOptionPane.WARNING_MESSAGE);
+        }
+        afterLocationChange(parent, oldFile, newShortcut);
+    }
+
+
+    /** Tells about a start command that names the old file and updates the desktop shortcut. */
+    private void afterLocationChange(Component parent, File oldFile, boolean newShortcut)
+    {
+        if (System.getProperty(ConfigLocation.PROPERTY) != null) {
+            // started with -Detotp.config (a launcher file, or the desktop shortcut that is updated below)
+            JOptionPane.showMessageDialog(parent, msg.format("location.explicit", oldFile.getAbsolutePath()),
+                                          PROGNAME, JOptionPane.INFORMATION_MESSAGE);
+        }
+        if (newShortcut || !DesktopShortcut.isSupported()) {
+            return;
+        }
+        File newFile = configFile;
+        SHORTCUTS.execute(new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() throws Exception
+            {
+                return DesktopShortcut.update(oldFile, newFile);
+            }
+
+            @Override
+            protected void done()
+            {
+                try {
+                    String path = get();
+                    if (path != null) {
+                        setStatus(msg.format("status.shortcutUpdated", path), false);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    setStatus(msg.format("error.shortcut", e.getCause().getMessage()), true);
+                }
+            }
+        });
+    }
+
+
+    /** Lets the user choose a new location and moves the opened configuration file there. */
+    private void moveConfig()
+    {
+        if (!opened || readOnlyReason != null) {
+            return;
+        }
+        File chosen = chooseLocation(settingsDialog, msg, configFile);
+        if (chosen == null || sameFile(chosen, configFile)) {
+            return;
+        }
+        if (chosen.exists()) {
+            JOptionPane.showMessageDialog(settingsDialog, msg.format("location.exists", chosen.getAbsolutePath()),
+                                          PROGNAME, JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        File oldFile = configFile;
+        try {
+            if (!Arrays.equals(Files.readAllBytes(oldFile.toPath()), fileContent)) {
+                throw new IOException("The configuration file was changed by another program; restart et-OTP-v2 to see the changes");
+            }
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(settingsDialog, msg.format("error.move", e.getMessage()),
+                                          PROGNAME, JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        FileLock newLock = lockOrShowError(chosen);
+        if (newLock == null) {
+            return;
+        }
+        try {
+            AtomicFiles.writeNew(fileContent, chosen);
+        } catch (java.nio.file.FileAlreadyExistsException e) {
+            releaseLock(newLock);
+            JOptionPane.showMessageDialog(settingsDialog, msg.format("location.exists", chosen.getAbsolutePath()),
+                                          PROGNAME, JOptionPane.WARNING_MESSAGE);
+            return;
+        } catch (IOException | RuntimeException e) {
+            releaseLock(newLock);
+            JOptionPane.showMessageDialog(settingsDialog, msg.format("error.move", e.getMessage()),
+                                          PROGNAME, JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        try {
+            if (!Arrays.equals(Files.readAllBytes(chosen.toPath()), fileContent)) {
+                throw new IOException("The copy differs from the configuration file: " + chosen);
+            }
+            // another program may have changed the file meanwhile: then keep it, and remove the copy
+            if (!Arrays.equals(Files.readAllBytes(oldFile.toPath()), fileContent)) {
+                throw new IOException("The configuration file was changed by another program; restart et-OTP-v2 to see the changes");
+            }
+        } catch (IOException | RuntimeException e) {
+            deleteIfUnchanged(chosen, fileContent);
+            releaseLock(newLock);
+            JOptionPane.showMessageDialog(settingsDialog, msg.format("error.move", e.getMessage()),
+                                          PROGNAME, JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        // remembered before the original is deleted: if this fails, the next start still finds the original
+        // (remember() also refuses to replace a configuration file that has the name of the pointer file)
+        try {
+            ConfigLocation.remember(ConfigLocation.pointerFile(ConfigLocation.homeDir()), chosen);
+        } catch (IOException | RuntimeException e) {
+            deleteIfUnchanged(chosen, fileContent);
+            releaseLock(newLock);
+            JOptionPane.showMessageDialog(settingsDialog, msg.format("error.move", msg.format("error.remember", e.getMessage())),
+                                          PROGNAME, JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        String status = msg.format("status.moved", chosen.getAbsolutePath());
+        try {
+            Files.delete(oldFile.toPath());
+        } catch (IOException e) {
+            status = msg.format("status.movedNotDeleted", chosen.getAbsolutePath(), oldFile.getAbsolutePath());
+            // also as a dialog: the status line may soon show the result of the shortcut update instead
+            JOptionPane.showMessageDialog(settingsDialog, status, PROGNAME, JOptionPane.WARNING_MESSAGE);
+        }
+        // released only now, so another instance cannot open the old file while it is deleted
+        releaseLock(instanceLock);
+        instanceLock = newLock;
+        useFile(chosen);
+        setStatus(status, false);
+        afterLocationChange(settingsDialog, oldFile, false);
+    }
+
+
+    /** Deletes the copy made by a failed move, but not a file that another program changed meanwhile. */
+    private static void deleteIfUnchanged(File file, byte[] content)
+    {
+        try {
+            if (Arrays.equals(Files.readAllBytes(file.toPath()), content)) {
+                Files.delete(file.toPath());
+            }
+        } catch (IOException ignored) {
+            // then the copy stays; it holds the same encrypted data as the original
+        }
+    }
+
+
+    /**
+     * Shows a save dialog for the configuration file and checks the chosen location.
+     *
+     * @return the chosen file, or null if cancelled
+     */
+    static File chooseLocation(Component parent, Messages msg, File current)
+    {
+        JFileChooser chooser = new JFileChooser(current.getAbsoluteFile().getParentFile());
+        chooser.setDialogTitle(msg.get("location.title"));
+        chooser.setSelectedFile(current.getAbsoluteFile());
+        // the default name starts with a dot: show such files too
+        chooser.setFileHidingEnabled(false);
+        while (chooser.showSaveDialog(parent) == JFileChooser.APPROVE_OPTION) {
+            File chosen = ConfigLocation.normalize(chooser.getSelectedFile());
+            String problem = ConfigLocation.problem(chosen, ConfigLocation.homeDir());
+            if (problem == null) {
+                return chosen;
+            }
+            JOptionPane.showMessageDialog(parent, msg.format(problem, chosen.getAbsolutePath()),
+                                          msg.get("location.title"), JOptionPane.WARNING_MESSAGE);
+        }
+        return null;
+    }
+
+
+    static boolean sameFile(File a, File b)
+    {
+        return ConfigLocation.sameFile(a, b);
     }
 
 
@@ -451,6 +827,7 @@ public class GUI implements AccountRow.Actions
             public void windowClosing(WindowEvent e)
             {
                 saveWindowLocation();
+                finishShortcuts();
             }
         });
 
@@ -509,6 +886,18 @@ public class GUI implements AccountRow.Actions
         unlock.addActionListener(e -> unlock());
         field.add(unlock, BorderLayout.EAST);
         panel.add(field, c);
+
+        c.gridx = 0;
+        c.gridy = 3;
+        c.gridwidth = 2;
+        c.weightx = 0;
+        c.fill = GridBagConstraints.NONE;
+        c.anchor = GridBagConstraints.EAST;
+        c.insets = new Insets(0, 20, 20, 20);
+        otherFileButton = new JButton(msg.get("unlock.otherFile"));
+        otherFileButton.addActionListener(e -> showSetupWizard());
+        otherFileButton.setVisible(pendingLocationFrom != null);
+        panel.add(otherFileButton, c);
         return panel;
     }
 
@@ -987,12 +1376,13 @@ public class GUI implements AccountRow.Actions
 
     private void createShortcut()
     {
+        File file = configFile;
         setBusy(true);
-        new SwingWorker<String, Void>() {
+        SHORTCUTS.execute(new SwingWorker<String, Void>() {
             @Override
             protected String doInBackground() throws Exception
             {
-                return DesktopShortcut.create(configFile, uiSettings.file().getAbsoluteFile().getParentFile());
+                return DesktopShortcut.create(file);
             }
 
             @Override
@@ -1007,7 +1397,19 @@ public class GUI implements AccountRow.Actions
                     setStatus(msg.format("error.shortcut", e.getCause().getMessage()), true);
                 }
             }
-        }.execute();
+        });
+    }
+
+
+    /** Waits a short time for queued shortcut updates, so the shortcut does not keep naming a moved file. */
+    private static void finishShortcuts()
+    {
+        SHORTCUTS.shutdown();
+        try {
+            SHORTCUTS.awaitTermination(30, java.util.concurrent.TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
 
@@ -1023,6 +1425,7 @@ public class GUI implements AccountRow.Actions
     private void quit()
     {
         saveWindowLocation();
+        finishShortcuts();
         System.exit(0);
     }
 
@@ -1140,12 +1543,6 @@ public class GUI implements AccountRow.Actions
         c.insets = new Insets(10, 0, 10, 0);
         panel.add(apply, c);
 
-        c.anchor = GridBagConstraints.NORTHWEST;
-        c.fill = GridBagConstraints.HORIZONTAL;
-        c.insets = new Insets(10, 0, 0, 0);
-        panel.add(new JLabel(msg.get("settings.file")), c);
-        c.insets = new Insets(0, 0, 0, 0);
-        panel.add(pathText(configFile), c);
         c.weighty = 1;
         panel.add(new JPanel(), c);
         return panel;
@@ -1200,12 +1597,12 @@ public class GUI implements AccountRow.Actions
     private JPanel buildGeneralTab()
     {
         JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         GridBagConstraints c = new GridBagConstraints();
+        c.gridx = 0;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
         c.anchor = GridBagConstraints.NORTHWEST;
-        c.insets = new Insets(10, 10, 10, 10);
-        c.gridx = 1;
-        c.gridy = 1;
-        panel.add(new JLabel(msg.get("settings.language")), c);
 
         String[] names = new String[LANGUAGES.length];
         for (int i = 0; i < LANGUAGES.length; i++) {
@@ -1214,10 +1611,31 @@ public class GUI implements AccountRow.Actions
         JComboBox<String> language = new JComboBox<>(names);
         language.setSelectedIndex(Arrays.asList(LANGUAGES).indexOf(uiSettings.language()));
         language.addActionListener(e -> changeLanguage(LANGUAGES[language.getSelectedIndex()]));
-        c.gridx = 2;
-        c.weightx = 1;
+        // the combo box keeps its full width in its own row
+        JPanel languageRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        languageRow.add(new JLabel(msg.get("settings.language")));
+        languageRow.add(Box.createHorizontalStrut(10));
+        languageRow.add(language);
+        panel.add(languageRow, c);
+
+        c.insets = new Insets(20, 0, 0, 0);
+        panel.add(new JLabel(msg.get("settings.file")), c);
+        c.insets = new Insets(2, 0, 0, 0);
+        settingsPath = pathText(configFile);
+        panel.add(settingsPath, c);
+        JLabel note = SetupWizard.note(msg.get("location.move.note"));
+        note.setBorder(BorderFactory.createEmptyBorder());
+        c.insets = new Insets(8, 0, 0, 0);
+        panel.add(note, c);
+        JButton move = new JButton(msg.get("location.move"));
+        move.setEnabled(opened && readOnlyReason == null);
+        move.addActionListener(e -> moveConfig());
+        c.fill = GridBagConstraints.NONE;
+        c.anchor = GridBagConstraints.EAST;
+        c.insets = new Insets(8, 0, 0, 0);
+        panel.add(move, c);
         c.weighty = 1;
-        panel.add(language, c);
+        panel.add(new JPanel(), c);
         return panel;
     }
 

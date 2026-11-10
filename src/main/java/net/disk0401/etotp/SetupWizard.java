@@ -13,6 +13,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -24,6 +25,7 @@ import javax.swing.JCheckBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JRadioButton;
@@ -33,7 +35,8 @@ import javax.swing.WindowConstants;
 
 /**
  * First start wizard (et-otp issue #3): explains the program, lets the user choose the protection
- * (on Windows: Windows user or password) and the password, and offers a desktop shortcut.
+ * (on Windows: Windows user or password) and the password, and offers a desktop shortcut. The location of
+ * the configuration file can be changed, also to an existing configuration file, which is then opened.
  * The caller creates the configuration file from the result.
  */
 final class SetupWizard extends JDialog
@@ -52,12 +55,19 @@ final class SetupWizard extends JDialog
         /** the new password for {@link AccountStore.Protection#PASSWORD}; the caller clears it. */
         final char[] password;
         final boolean shortcut;
+        /** the configuration file to create, or to open if {@link #useExisting} */
+        final File configFile;
+        /** true if the user chose an existing configuration file: open it instead of creating one */
+        final boolean useExisting;
 
-        Result(AccountStore.Protection protection, char[] password, boolean shortcut)
+        Result(AccountStore.Protection protection, char[] password, boolean shortcut, File configFile,
+               boolean useExisting)
         {
             this.protection = protection;
             this.password = password;
             this.shortcut = shortcut;
+            this.configFile = configFile;
+            this.useExisting = useExisting;
         }
     }
 
@@ -75,12 +85,15 @@ final class SetupWizard extends JDialog
     private final JButton next;
     private int step;
     private Result result;
+    private File configFile;
+    private javax.swing.JTextArea pathText;
 
 
     SetupWizard(JFrame owner, Messages msg, File configFile)
     {
         super(owner, msg.format("wizard.title", GUI.PROGNAME), true);
         this.msg = msg;
+        this.configFile = configFile.getAbsoluteFile();
         setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 
         windowsUser = new JRadioButton(msg.get("protection.windows"), true);
@@ -90,7 +103,7 @@ final class SetupWizard extends JDialog
         group.add(password);
         shortcut = new JCheckBox(msg.get("wizard.shortcut"), DesktopShortcut.isSupported());
 
-        addStep(STEP_INTRO, introStep(configFile));
+        addStep(STEP_INTRO, introStep());
         // without Windows data protection there is nothing to choose: always a password
         if (Dpapi.isAvailable()) {
             addStep(STEP_PROTECTION, protectionStep());
@@ -178,7 +191,7 @@ final class SetupWizard extends JDialog
         }
         boolean wantShortcut = shortcut.isSelected() && DesktopShortcut.isSupported();
         if (windowsUser.isSelected() && Dpapi.isAvailable()) {
-            result = new Result(AccountStore.Protection.WINDOWS_USER, null, wantShortcut);
+            result = new Result(AccountStore.Protection.WINDOWS_USER, null, wantShortcut, configFile, false);
             dispose();
             return;
         }
@@ -191,7 +204,7 @@ final class SetupWizard extends JDialog
                 Arrays.fill(p, '\0');
                 return;
             }
-            result = new Result(AccountStore.Protection.PASSWORD, p, wantShortcut);
+            result = new Result(AccountStore.Protection.PASSWORD, p, wantShortcut, configFile, false);
             dispose();
         } finally {
             Arrays.fill(c, '\0');
@@ -199,15 +212,55 @@ final class SetupWizard extends JDialog
     }
 
 
-    private JPanel introStep(File configFile)
+    private JPanel introStep()
     {
         JPanel panel = textPanel();
         panel.add(text("<h2>" + GUI.html(msg.format("wizard.intro.heading", GUI.PROGNAME)) + "</h2>"
                        + para(msg.format("wizard.intro.text1", GUI.PROGNAME))
                        + para(msg.format("wizard.intro.text2", GUI.PROGNAME))
                        + para(msg.get("wizard.intro.text3"))), constraints(0));
-        panel.add(GUI.pathText(configFile), constraints(1));
+        pathText = GUI.pathText(configFile);
+        panel.add(pathText, constraints(1));
+        JButton change = new JButton(msg.get("location.change"));
+        change.addActionListener(e -> changeLocation());
+        GridBagConstraints c = constraints(2);
+        c.fill = GridBagConstraints.NONE;
+        c.anchor = GridBagConstraints.EAST;
+        panel.add(change, c);
         return fillRest(panel);
+    }
+
+
+    /**
+     * Lets the user choose the location. A new file is created there at the end of the wizard; an existing
+     * configuration file is opened right away after a confirmation.
+     */
+    private void changeLocation()
+    {
+        File chosen = GUI.chooseLocation(this, msg, configFile);
+        if (chosen == null) {
+            return;
+        }
+        if (chosen.exists()) {
+            try {
+                AccountStore.inspect(chosen);
+            } catch (IOException | RuntimeException e) {
+                JOptionPane.showMessageDialog(this, msg.format("location.notConfig", chosen.getAbsolutePath()),
+                                              msg.get("location.title"), JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            int answer = JOptionPane.showConfirmDialog(this, msg.format("location.useExisting", chosen.getAbsolutePath()),
+                                                       msg.get("location.title"), JOptionPane.OK_CANCEL_OPTION,
+                                                       JOptionPane.QUESTION_MESSAGE);
+            if (answer == JOptionPane.OK_OPTION) {
+                result = new Result(null, null, false, chosen, true);
+                dispose();
+            }
+            return;
+        }
+        configFile = chosen;
+        pathText.setText(chosen.getAbsolutePath());
+        GUI.packWrapped(this);
     }
 
 

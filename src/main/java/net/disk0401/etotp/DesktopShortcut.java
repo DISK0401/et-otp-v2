@@ -21,12 +21,22 @@ import java.util.concurrent.TimeUnit;
 final class DesktopShortcut
 {
     static final String NAME = "et-OTP-v2";
+    private static final String ICON_FILE_NAME = "et-otp-v2.ico";
 
     private static final String SCRIPT =
         "$ErrorActionPreference = 'Stop';"
         + "$desktop = [Environment]::GetFolderPath('Desktop');"
         + "$path = Join-Path $desktop ($env:ETOTP_NAME + '.lnk');"
         + "$s = (New-Object -ComObject WScript.Shell).CreateShortcut($path);"
+        // when updating: only a shortcut that exists and opens the old configuration file
+        // (compared as full paths, ignoring case like Windows)
+        + "if ($env:ETOTP_OLD_CONFIG) {"
+        + " if (-not (Test-Path -LiteralPath $path)) { exit 0 };"
+        // no double quote in the script: Windows removes them from the command line (\x22 is the quote)
+        + " $m = [regex]::Match($s.Arguments, '-Detotp[.]config=([^\\x22]*)');"
+        + " if (-not $m.Success) { exit 0 };"
+        + " if (-not [string]::Equals([IO.Path]::GetFullPath($m.Groups[1].Value),"
+        + " [IO.Path]::GetFullPath($env:ETOTP_OLD_CONFIG), [StringComparison]::OrdinalIgnoreCase)) { exit 0 } };"
         + "$s.TargetPath = $env:ETOTP_TARGET;"
         + "$s.Arguments = $env:ETOTP_ARGS;"
         + "$s.WorkingDirectory = $env:ETOTP_DIR;"
@@ -63,10 +73,31 @@ final class DesktopShortcut
      *
      * @param configFile the configuration file in use; the shortcut always opens this file, even if it was
      *        found in the working directory (the shortcut starts in the program's folder)
-     * @param iconDir a writable folder for the icon file
      * @return the path of the shortcut
      */
-    static String create(File configFile, File iconDir) throws IOException
+    static String create(File configFile) throws IOException
+    {
+        return write(configFile, null);
+    }
+
+
+    /**
+     * Updates the shortcut after the configuration file was moved: only if it exists and opens the old file.
+     *
+     * @return the path of the updated shortcut, or null if there was none to update
+     */
+    static String update(File oldConfigFile, File newConfigFile) throws IOException
+    {
+        if (!isSupported()) {
+            return null;
+        }
+        String path = write(newConfigFile, oldConfigFile.getAbsolutePath());
+        return path.isEmpty() ? null : path;
+    }
+
+
+    /** @param oldConfig if not null: only update a shortcut that opens this file */
+    private static String write(File configFile, String oldConfig) throws IOException
     {
         File jar = jar();
         if (!Dpapi.isAvailable() || jar == null) {
@@ -76,19 +107,21 @@ final class DesktopShortcut
         if (!javaw.isFile()) {
             throw new IOException("javaw.exe not found: " + javaw);
         }
-        File icon = new File(iconDir, "et-otp-v2.ico");
+        File icon = iconFile();
+        java.nio.file.Files.createDirectories(icon.toPath().getParent());
         AppIcon.writeIco(icon.toPath());
-
-        StringBuilder args = new StringBuilder();
-        args.append(quote("-D" + ConfigLocation.PROPERTY + "=" + configFile.getAbsolutePath())).append(' ');
-        args.append("-jar ").append(quote(jar.getAbsolutePath()));
 
         ProcessBuilder pb = new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive",
                                                "-ExecutionPolicy", "Bypass", "-Command", SCRIPT);
         Map<String, String> env = pb.environment();
         env.put("ETOTP_NAME", NAME);
         env.put("ETOTP_TARGET", javaw.getAbsolutePath());
-        env.put("ETOTP_ARGS", args.toString());
+        env.put("ETOTP_ARGS", arguments(configFile, jar));
+        if (oldConfig != null) {
+            env.put("ETOTP_OLD_CONFIG", oldConfig);
+        } else {
+            env.remove("ETOTP_OLD_CONFIG");
+        }
         env.put("ETOTP_DIR", jar.getAbsoluteFile().getParent());
         env.put("ETOTP_ICON", icon.getAbsolutePath());
         pb.redirectErrorStream(true);
@@ -109,6 +142,30 @@ final class DesktopShortcut
             throw new IOException(output.isEmpty() ? "PowerShell failed (" + p.exitValue() + ")" : output);
         }
         return output;
+    }
+
+
+    /**
+     * @return the icon file of the shortcut, in the program's folder in the local application data of the user,
+     *         which is writable wherever the configuration file is
+     */
+    static File iconFile()
+    {
+        String local = System.getenv("LOCALAPPDATA");
+        File base = local != null && !local.isEmpty() ? new File(local) : ConfigLocation.homeDir();
+        return new File(new File(base, NAME), ICON_FILE_NAME);
+    }
+
+
+    private static String arguments(File configFile, File jar)
+    {
+        return configArgument(configFile) + " -jar " + quote(jar.getAbsolutePath());
+    }
+
+
+    private static String configArgument(File configFile)
+    {
+        return quote("-D" + ConfigLocation.PROPERTY + "=" + configFile.getAbsolutePath());
     }
 
 

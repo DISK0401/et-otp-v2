@@ -10,8 +10,9 @@ How to start
 
 Settings
 The settings are saved to .et-otp.properties in your home folder, and the language and window
-position to .et-otp-ui.properties next to it. To carry the settings with this folder (e.g. on a
-USB drive), follow the comment in the launcher file.
+position to .et-otp-ui.properties next to it. The location can be changed in the setup wizard
+or with Settings > General > Move.... To carry the settings with this folder (e.g. on a USB
+drive), follow the comment in the launcher file.
 
 If you use this on a company or organization computer, check your organization's software
 policy first.
@@ -32,7 +33,7 @@ et-otp-v2 ポータブル版
 - Linux: ターミナルで sh et-otp-v2.sh を実行します。
 
 設定の保存先
-設定はホームフォルダの .et-otp.properties に、言語とウィンドウの位置は同じフォルダの .et-otp-ui.properties に保存されます。USB メモリなどで持ち運ぶ場合は、起動用のファイルの説明に従って、設定をこのフォルダに保存するように変えられます。
+設定はホームフォルダの .et-otp.properties に、言語とウィンドウの位置は同じフォルダの .et-otp-ui.properties に保存されます。保存先は、初期設定のウィザードか、設定画面の「全般」タブの「移動...」で変えられます。USB メモリなどで持ち運ぶ場合は、起動用のファイルの説明に従って、設定をこのフォルダに保存するように変えられます。
 
 会社や組織のパソコンで使う場合は、ソフトウェアの利用について社内のルールを確かめてから使ってください。
 
