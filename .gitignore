@@ -1,10 +1,15 @@
 # Build output
 target/
 antBuild/
+# backup of mvn versions:set
+pom.xml.versionsBackup
 
 # Local token configuration (contains encrypted secrets)
 /.et-otp.properties
-/.et-otp.properties.v1.bak
+/.et-otp.properties.v1.bak*
+/.et-otp.properties.v2.bak*
+/.et-otp.properties.lock
+/.et-otp-ui.properties
 
 # IDE
 .classpath
