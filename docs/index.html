@@ -23,20 +23,21 @@
   <div class="hero">
     <div>
       <h1>A TOTP soft token for your desktop</h1>
-      <p>et-otp-v2 generates time-based one-time passwords (RFC 6238) for two-step verification. It is a small Java Swing program that keeps your secret encrypted with a password.</p>
+      <p>et-otp-v2 generates time-based one-time passwords (RFC 6238) for two-step verification. It is a small Java Swing program that registers a service by reading the QR code shown on your screen.</p>
       <a class="button" href="https://github.com/DISK0401/et-otp-v2/releases">Download</a>
       <a class="button secondary" href="https://github.com/DISK0401/et-otp-v2">Source code</a>
     </div>
-    <img src="images/screenshot.jpg" width="270" height="225" alt="et-OTP main window showing the unlock password field, the current code and the next code">
+    <img src="images/screenshot-en.png" width="460" height="386" alt="et-OTP-v2 main window with three registered services, their codes and the remaining time">
   </div>
 
   <section id="features">
     <h2>Features</h2>
     <ul>
-      <li>Generates 6-digit TOTP codes with a 30-second step (RFC 6238 / RFC 4226), and also shows the next code.</li>
-      <li>Accepts the secret in Base32 text form, as offered by Google, Amazon AWS, Microsoft, Dropbox, GitHub and many other services.</li>
-      <li>Stores the secret encrypted with your unlock password (PBKDF2-HMAC-SHA256 and AES-256-GCM).</li>
-      <li>Copies the code to the clipboard.</li>
+      <li>Generates two-step verification codes (TOTP, RFC 6238) and shows the next code and the remaining time. SHA-1, SHA-256 and SHA-512, 6 to 8 digits and any period are supported.</li>
+      <li>Holds any number of services. Click a code or press Copy to copy it to the clipboard.</li>
+      <li>Registers a service by reading the QR code shown on the screen; on Windows also from a window behind other windows. A QR code image file or the key typed in also works.</li>
+      <li>Stores the services encrypted. On Windows, choose between protection for your Windows user (no password) and a password; on macOS and Linux a password is used.</li>
+      <li>English and Japanese user interface.</li>
     </ul>
   </section>
 
@@ -52,34 +53,38 @@
       </table>
     </div>
     <p>The bundled Java executables are Amazon's original Corretto binaries with Amazon's signatures. On a company or organization computer, check your organization's software policy first.</p>
-    <p>With Java 17 or later installed, you can also use the plain JAR:</p>
+    <p>With Java 25 or later installed, you can also use the plain JAR:</p>
     <pre><code>java -jar et-otp-v2-&lt;version&gt;.jar</code></pre>
     <p>To build it yourself, run <code>mvn verify</code> and use the JAR in the <code>target</code> folder.</p>
   </section>
 
   <section id="setup">
-    <h2>Set up a token</h2>
+    <h2>Register a service</h2>
     <ol>
-      <li>On the service's two-step verification page, choose the option to show the secret as text instead of a QR code.</li>
-      <li>In et-otp-v2, open <b>et-OTP v2 → Settings</b>, paste the Base32 code and choose an unlock password, then press <b>Save</b>.</li>
-      <li>Enter the unlock password in the main window and press <b>Calc</b> (or Enter). Type the shown code into the service to confirm the setup.</li>
+      <li>Start et-otp-v2. On the first start a setup wizard opens: choose the protection, and a password if you protect with a password. On Windows it can also create a desktop shortcut.</li>
+      <li>In the browser, open the two-step verification setup page of the service so that it shows the QR code.</li>
+      <li>In et-otp-v2, press <b>Read QR code from screen</b>. A list of your screens and windows opens, and the one with the QR code is selected. Check it, press <b>Read</b>, check the name of the service and press <b>OK</b> to register it. The images are only used for the list and to find QR codes; they are not saved.</li>
+      <li>Type the code shown by et-otp-v2 into the setup page of the service. Without this step the service does not complete the setup.</li>
     </ol>
-    <p>The settings are saved to <code>.et-otp.properties</code> in your home folder. If <code>.et-otp.properties</code> exists in the working directory, that file is used instead (same as et-otp 1.x). <b>Help → About</b> shows the full path.</p>
+    <p>If no QR code is found, check that it is not too small (enlarge the page with Ctrl and +). With a QR code image file use <b>QR code image file...</b>, and with the key (a text of letters and digits) use <b>Enter key...</b>.</p>
+    <p>The services are saved to <code>.et-otp.properties</code> in your home folder. If <code>.et-otp.properties</code> exists in the working directory, that file is used instead (same as et-otp 1.x). <b>Help → About</b> shows the full path. The language and the window position are saved to <code>.et-otp-ui.properties</code> in the same folder.</p>
+    <p>The protection can be changed on the <b>Protection</b> tab of <b>et-OTP-v2 → Settings</b>. Services protected for your Windows user cannot be read on another computer or by another Windows user, so on a new computer you register them again. Keep the backup codes (recovery codes) of your services somewhere other than the computer.</p>
+    <p>The user interface follows the language of the OS: Japanese on a Japanese system, English otherwise. To change it, open <b>et-OTP-v2 → Settings</b> and select the language on the <b>General</b> tab.</p>
   </section>
 
   <section id="upgrade">
-    <h2>Upgrading from et-otp 1.x</h2>
-    <p>et-otp-v2 reads the configuration file of the original et-otp, so you can keep using your existing <code>.et-otp.properties</code>. Start et-otp-v2 in the same folder and unlock it with your current password.</p>
-    <p>On the first successful unlock, et-otp-v2 copies the old file to <code>.et-otp.properties.v1.bak</code> and re-writes <code>.et-otp.properties</code> in the new format. The status line in the main window tells you when this has happened.</p>
+    <h2>Upgrading from et-otp 1.x and et-otp-v2 2.0</h2>
+    <p>et-otp-v2 reads the configuration files of the original et-otp and of et-otp-v2 2.0, so you can keep using your existing <code>.et-otp.properties</code>. Start et-otp-v2 in the same folder and unlock it with your current password.</p>
+    <p>On the first successful unlock, et-otp-v2 copies the old file to <code>.et-otp.properties.v1.bak</code> (et-otp 1.x) or <code>.et-otp.properties.v2.bak</code> (et-otp-v2 2.0) and re-writes <code>.et-otp.properties</code> in the new format, which holds several services.</p>
     <div class="note">
-      <p><b>Check the code once after the upgrade.</b> The old format cannot detect every wrong password. If the codes are not accepted by the service, restore the backup file and unlock again with the correct password.</p>
-      <p>The original et-otp 1.x cannot read the new format. If you need to go back, use the backup file. Once the new codes work, delete the backup, because it is still protected by the old, weaker encryption.</p>
+      <p><b>After upgrading from et-otp 1.x, check the code once.</b> The old format cannot detect every wrong password. If the codes are not accepted by the service, restore the backup file and unlock again with the correct password.</p>
+      <p>et-otp 1.x and et-otp-v2 2.0 cannot read the new format. If you need to go back, use the backup file. Once the new codes work, delete the backup.</p>
     </div>
     <div class="table-scroll">
       <table>
         <tr><th></th><th>et-otp 1.x</th><th>et-otp-v2</th></tr>
-        <tr><td>Key derivation</td><td>PBKDF2-HMAC-SHA1, 1,000 iterations, 128-bit key</td><td>PBKDF2-HMAC-SHA256, 600,000 iterations, 256-bit key</td></tr>
-        <tr><td>Encryption</td><td>AES in ECB mode with PKCS#5 padding</td><td>AES-256-GCM with a random 96-bit IV</td></tr>
+        <tr><td>Key derivation</td><td>PBKDF2-HMAC-SHA1, 1,000 iterations, 128-bit key</td><td>PBKDF2-HMAC-SHA256, 600,000 iterations, 256-bit key (password protection)</td></tr>
+        <tr><td>Encryption</td><td>AES in ECB mode with PKCS#5 padding</td><td>AES-256-GCM with a random 96-bit IV (password protection), or Windows DPAPI</td></tr>
         <tr><td>Wrong password / tampering</td><td>Not always detected</td><td>Always detected</td></tr>
       </table>
     </div>
@@ -88,12 +93,12 @@
   <section id="license">
     <h2>License and credits</h2>
     <p>et-otp-v2 is free software under the <a href="https://github.com/DISK0401/et-otp-v2/blob/main/LICENSE">GNU General Public License v2.0 only</a>.</p>
-    <p>It is a maintained continuation of <a href="https://github.com/ecki/et-otp">et-otp</a> by Bernd Eckenfels. It includes code from the HOTP reference implementation in RFC 4226 and the Base32 implementation of the Google Authenticator project.</p>
+    <p>It is a continuation of <a href="https://github.com/ecki/et-otp">et-otp</a> by Bernd Eckenfels. It includes code from the HOTP reference implementation in RFC 4226, the Base32 implementation of the Google Authenticator project, and a Java port of the QR code decoder <a href="https://github.com/dlbeer/quirc">quirc</a> by Daniel Beer (ISC license).</p>
   </section>
 </main>
 
 <footer>
-  <div class="wrap">et-otp-v2 · maintained by <a href="https://github.com/DISK0401">DISK0401</a> · <a href="https://github.com/DISK0401/et-otp-v2/issues">Report an issue</a></div>
+  <div class="wrap">et-otp-v2 · developed by <a href="https://github.com/DISK0401">DISK0401</a> · <a href="https://github.com/DISK0401/et-otp-v2/issues">Report an issue</a></div>
 </footer>
 </body>
 </html>

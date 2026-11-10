@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>et-otp-v2 – デスクトップ用 TOTP ソフトトークン</title>
-  <meta name="description" content="et-otp-v2 は Java で作ったデスクトップ用の TOTP（RFC 6238）ソフトトークンです。ecki/et-otp を引き継いで保守しています。">
+  <meta name="description" content="et-otp-v2 は Java で作ったデスクトップ用の TOTP（RFC 6238）ソフトトークンです。ecki/et-otp を引き継いで開発しています。">
   <link rel="stylesheet" href="../style.css">
   <link rel="alternate" hreflang="en" href="../">
 </head>
@@ -23,20 +23,21 @@
   <div class="hero">
     <div>
       <h1>デスクトップで使える TOTP ソフトトークン</h1>
-      <p>et-otp-v2 は2段階認証に使う時間ベースのワンタイムパスワード（RFC 6238）を生成します。Java Swing で作った小さなプログラムで、シークレットはパスワードで暗号化して保存します。</p>
+      <p>et-otp-v2 は2段階認証に使う時間ベースのワンタイムパスワード（RFC 6238）を生成します。Java Swing で作った小さなプログラムで、画面に表示した QR コードを読み取ってサービスを登録できます。</p>
       <a class="button" href="https://github.com/DISK0401/et-otp-v2/releases">ダウンロード</a>
       <a class="button secondary" href="https://github.com/DISK0401/et-otp-v2">ソースコード</a>
     </div>
-    <img src="../images/screenshot.jpg" width="270" height="225" alt="et-OTP のメイン画面。ロック解除用のパスワード欄、今のコード、次のコードが表示されている">
+    <img src="../images/screenshot-ja.png" width="465" height="386" alt="et-OTP-v2 のメイン画面。3 件のサービスのコードと残り時間が表示されている">
   </div>
 
   <section id="features">
     <h2>機能</h2>
     <ul>
-      <li>30秒ごとに変わる6桁の TOTP コード（RFC 6238 / RFC 4226）を生成し、次のコードもあわせて表示します。</li>
-      <li>Google、Amazon AWS、Microsoft、Dropbox、GitHub などのサービスが提供する Base32 形式のシークレットを使えます。</li>
-      <li>シークレットはロック解除用のパスワードで暗号化して保存します（PBKDF2-HMAC-SHA256 と AES-256-GCM）。</li>
-      <li>生成したコードをクリップボードにコピーできます。</li>
+      <li>2 段階認証のコード（TOTP、RFC 6238）を生成し、次のコードと残り時間もあわせて表示します。SHA-1、SHA-256、SHA-512、6〜8 桁、任意の更新間隔に対応しています。</li>
+      <li>複数のサービスを登録できます。コードをクリックするか「コピー」を押すと、クリップボードにコピーできます。</li>
+      <li>画面に表示した QR コードを読み取ってサービスを登録できます。Windows では、ほかのウィンドウの裏にあるウィンドウからも読み取れます。QR コードの画像ファイルや、キーの入力でも登録できます。</li>
+      <li>登録したサービスは暗号化して保存します。Windows では、Windows のユーザーで保護する方法（パスワード不要）と、パスワードで保護する方法を選べます。macOS と Linux では、パスワードで保護します。</li>
+      <li>画面は日本語と英語に対応しています。</li>
     </ul>
   </section>
 
@@ -52,34 +53,38 @@
       </table>
     </div>
     <p>同梱している Java の実行ファイルは、Amazon の署名が付いた Corretto のものをそのまま使っています。会社や組織のパソコンで使う場合は、ソフトウェアの利用について社内のルールを確かめてから使ってください。</p>
-    <p>Java 17 以降が入っている環境では、JAR だけを使うこともできます。</p>
+    <p>Java 25 以降が入っている環境では、JAR だけを使うこともできます。</p>
     <pre><code>java -jar et-otp-v2-&lt;バージョン&gt;.jar</code></pre>
     <p>自分でビルドする場合は <code>mvn verify</code> を実行し、<code>target</code> フォルダの JAR を使います。</p>
   </section>
 
   <section id="setup">
-    <h2>トークンの設定</h2>
+    <h2>サービスの登録</h2>
     <ol>
-      <li>サービスの2段階認証の設定画面で、QR コードの代わりにシークレットをテキストで表示する方法を選びます。</li>
-      <li>et-otp-v2 で <b>et-OTP v2 → Settings</b> を開き、Base32 のコードを貼り付けてロック解除用のパスワードを決め、<b>Save</b> を押します。</li>
-      <li>メイン画面にロック解除用のパスワードを入力して <b>Calc</b> を押します（Enter キーでも同じです）。表示されたコードをサービスに入力し、設定を完了します。</li>
+      <li>et-otp-v2 を起動します。初めて起動したときは初期設定のウィザードが開くので、保護方法を選びます。パスワードで保護する場合は、パスワードも決めます。Windows では、デスクトップにショートカットも作れます。</li>
+      <li>ブラウザで、サービスの 2 段階認証の設定画面を開き、QR コードを表示します。</li>
+      <li>et-otp-v2 の <b>画面の QR コードを読み取る</b> を押します。画面とウィンドウが一覧で表示され、QR コードが見つかったものが選ばれた状態になります。選ばれているものを確かめて <b>読み取る</b> を押し、サービスの名前を確かめて <b>OK</b> を押すと、登録できます。画像は一覧の表示と QR コードを探すためだけに使い、保存しません。</li>
+      <li>et-otp-v2 に表示されたコードを、サービスの設定画面に入力します。この手順を行わないと、サービス側の設定は完了しません。</li>
     </ol>
-    <p>設定はホームフォルダの <code>.et-otp.properties</code> に保存されます。起動したときの作業フォルダに <code>.et-otp.properties</code> がある場合は、そちらを使います（et-otp 1.x と同じ動きです）。ファイルの場所は <b>Help → About</b> で確認できます。</p>
+    <p>QR コードが見つからない場合は、QR コードが小さすぎないかを確かめてください（Ctrl キーと「+」キーでページを拡大できます）。QR コードの画像ファイルがある場合は <b>QR コードの画像ファイルから...</b>、キー（英字と数字の文字列）が分かる場合は <b>キーを入力...</b> でも登録できます。</p>
+    <p>登録したサービスは、ホームフォルダの <code>.et-otp.properties</code> に保存されます。起動したときの作業フォルダに <code>.et-otp.properties</code> がある場合は、そちらを使います（et-otp 1.x と同じ動きです）。ファイルの場所は <b>ヘルプ → バージョン情報</b> で確認できます。言語とウィンドウの位置は、同じフォルダの <code>.et-otp-ui.properties</code> に保存されます。</p>
+    <p>保護方法は、<b>et-OTP-v2 → 設定</b> の <b>保護</b> タブで変えられます。Windows のユーザーで保護した場合、ほかの PC やほかの Windows ユーザーでは読めません。PC を替えたときはサービスを登録し直す必要があるので、サービスが発行するバックアップコード（リカバリーコード）を PC とは別の場所に保管してください。</p>
+    <p>画面の言語は OS の設定に合わせます。OS の言語が日本語なら日本語、それ以外なら英語で表示します。切り替える場合は、<b>et-OTP-v2 → 設定</b> を開き、<b>全般</b> タブで言語を選びます。</p>
   </section>
 
   <section id="upgrade">
-    <h2>et-otp 1.x からの移行</h2>
-    <p>et-otp-v2 は元の et-otp の設定ファイルを読めるので、今の <code>.et-otp.properties</code> をそのまま使えます。同じフォルダで et-otp-v2 を起動し、今のパスワードでロックを解除してください。</p>
-    <p>最初にロックを解除できたとき、et-otp-v2 は古いファイルを <code>.et-otp.properties.v1.bak</code> にコピーし、<code>.et-otp.properties</code> を新しい形式で書き直します。書き直したことは、メイン画面の下のステータス欄に表示されます。</p>
+    <h2>et-otp 1.x と et-otp-v2 2.0 からの移行</h2>
+    <p>et-otp-v2 は、元の et-otp と et-otp-v2 2.0 の設定ファイルを読めるので、今の <code>.et-otp.properties</code> をそのまま使えます。同じフォルダで et-otp-v2 を起動し、今のパスワードでロックを解除してください。</p>
+    <p>最初にロックを解除できたとき、et-otp-v2 は古いファイルを <code>.et-otp.properties.v1.bak</code>（et-otp 1.x の場合）または <code>.et-otp.properties.v2.bak</code>（et-otp-v2 2.0 の場合）にコピーします。そのあと <code>.et-otp.properties</code> を、複数のサービスを登録できる新しい形式で書き直します。</p>
     <div class="note">
-      <p>移行のあとで、コードが使えるかを一度確かめてください。古い形式ではパスワードの間違いを必ず見つけられるとは限りません。サービスがコードを受け付けない場合は、バックアップのファイルを元に戻し、正しいパスワードでロックを解除し直してください。</p>
-      <p>元の et-otp 1.x は新しい形式を読めません。元のバージョンに戻す場合は、バックアップのファイルを使ってください。新しいコードが使えることを確かめたら、バックアップは削除してください。バックアップは古い方式の弱い暗号化で守られたままです。</p>
+      <p>et-otp 1.x から移行したあとは、コードが使えるかを一度確かめてください。古い形式ではパスワードの間違いを必ず見つけられるとは限りません。サービスがコードを受け付けない場合は、バックアップのファイルを元に戻し、正しいパスワードでロックを解除し直してください。</p>
+      <p>et-otp 1.x と et-otp-v2 2.0 は新しい形式を読めません。元のバージョンに戻す場合は、バックアップのファイルを使ってください。新しいコードが使えることを確かめたら、バックアップは削除してください。</p>
     </div>
     <div class="table-scroll">
       <table>
         <tr><th></th><th>et-otp 1.x</th><th>et-otp-v2</th></tr>
-        <tr><td>鍵の導出</td><td>PBKDF2-HMAC-SHA1、1,000回、128ビットの鍵</td><td>PBKDF2-HMAC-SHA256、600,000回、256ビットの鍵</td></tr>
-        <tr><td>暗号化</td><td>AES の ECB モード、PKCS#5 パディング</td><td>AES-256-GCM、ランダムな96ビットの IV</td></tr>
+        <tr><td>鍵の導出</td><td>PBKDF2-HMAC-SHA1、1,000回、128ビットの鍵</td><td>PBKDF2-HMAC-SHA256、600,000回、256ビットの鍵（パスワードで保護する場合）</td></tr>
+        <tr><td>暗号化</td><td>AES の ECB モード、PKCS#5 パディング</td><td>AES-256-GCM、ランダムな96ビットの IV（パスワードで保護する場合）、または Windows の DPAPI</td></tr>
         <tr><td>パスワードの間違いと改ざん</td><td>見つけられない場合がある</td><td>必ず見つける</td></tr>
       </table>
     </div>
@@ -88,12 +93,12 @@
   <section id="license">
     <h2>ライセンスとクレジット</h2>
     <p>et-otp-v2 は <a href="https://github.com/DISK0401/et-otp-v2/blob/main/LICENSE">GNU General Public License v2.0 only</a> で公開しているフリーソフトウェアです。</p>
-    <p>Bernd Eckenfels 氏の <a href="https://github.com/ecki/et-otp">et-otp</a> を引き継いで保守しています。RFC 4226 にある HOTP の参照実装と、Google Authenticator プロジェクトの Base32 実装のコードを含みます。</p>
+    <p>Bernd Eckenfels 氏の <a href="https://github.com/ecki/et-otp">et-otp</a> を引き継いで開発しています。RFC 4226 にある HOTP の参照実装、Google Authenticator プロジェクトの Base32 実装、Daniel Beer 氏の QR コード解析ライブラリ <a href="https://github.com/dlbeer/quirc">quirc</a>（ISC ライセンス）を Java に移植したコードを含みます。</p>
   </section>
 </main>
 
 <footer>
-  <div class="wrap">et-otp-v2 · メンテナー <a href="https://github.com/DISK0401">DISK0401</a> · <a href="https://github.com/DISK0401/et-otp-v2/issues">不具合の報告</a></div>
+  <div class="wrap">et-otp-v2 · 開発：<a href="https://github.com/DISK0401">DISK0401</a> · <a href="https://github.com/DISK0401/et-otp-v2/issues">不具合の報告</a></div>
 </footer>
 </body>
 </html>

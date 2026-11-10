@@ -3,14 +3,14 @@
 
     <groupId>net.disk0401.etotp</groupId>
     <artifactId>et-otp</artifactId>
-    <version>2.0.0</version>
+    <version>2.1.0</version>
     <name>et-otp-v2</name>
     <description>et-otp-v2: TOTP software token (continuation of ecki/et-otp)</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <maven.compiler.release>17</maven.compiler.release>
+        <maven.compiler.release>25</maven.compiler.release>
     </properties>
 
     <build>
@@ -40,6 +40,10 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.6.1</version>
+                    <configuration>
+                        <!-- the DPAPI tests call Windows functions with the FFM API -->
+                        <argLine>--enable-native-access=ALL-UNNAMED</argLine>
+                    </configuration>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -66,6 +70,11 @@
                     <artifactId>maven-project-info-reports-plugin</artifactId>
                     <version>3.9.0</version>
                 </plugin>
+                <plugin>
+                    <groupId>io.github.git-commit-id</groupId>
+                    <artifactId>git-commit-id-maven-plugin</artifactId>
+                    <version>10.0.1</version>
+                </plugin>
             </plugins>
         </pluginManagement>
 
@@ -82,10 +91,10 @@
                         <configuration>
                             <rules>
                                 <requireMavenVersion>
-                                    <version>[3.6.3,)</version>
+                                    <version>[3.9.0,)</version>
                                 </requireMavenVersion>
                                 <requireJavaVersion>
-                                    <version>[17,)</version>
+                                    <version>[25,)</version>
                                 </requireJavaVersion>
                             </rules>
                         </configuration>
@@ -102,16 +111,72 @@
                             <addClasspath>false</addClasspath>
                             <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                         </manifest>
+                        <!-- build information (et-otp issue #6); also in build.properties for the About dialog -->
+                        <manifestEntries>
+                            <!-- calls to Windows APIs (DPAPI, window capture) with the FFM API -->
+                            <Enable-Native-Access>ALL-UNNAMED</Enable-Native-Access>
+                            <Git-Commit>${git.commit.id.abbrev}</Git-Commit>
+                            <Git-Dirty>${git.dirty}</Git-Dirty>
+                            <Git-Branch>${git.branch}</Git-Branch>
+                            <Git-Describe>${git.commit.id.describe}</Git-Describe>
+                            <Build-Time>${git.build.time}</Build-Time>
+                            <Build-Os>${os.name} ${os.arch}</Build-Os>
+                            <Build-Jdk>${java.vendor} ${java.version}</Build-Jdk>
+                        </manifestEntries>
                     </archive>
                 </configuration>
             </plugin>
+            <plugin>
+                <!-- provides git.* properties for build.properties and the manifest -->
+                <groupId>io.github.git-commit-id</groupId>
+                <artifactId>git-commit-id-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>get-git-info</id>
+                        <goals>
+                            <goal>revision</goal>
+                        </goals>
+                        <phase>initialize</phase>
+                    </execution>
+                </executions>
+                <configuration>
+                    <!-- a build from a source archive without .git still works; the values show as unknown -->
+                    <failOnNoGitDirectory>false</failOnNoGitDirectory>
+                    <failOnUnableToExtractRepoInfo>false</failOnUnableToExtractRepoInfo>
+                    <generateGitPropertiesFile>false</generateGitPropertiesFile>
+                    <dateFormat>yyyy-MM-dd'T'HH:mm:ss'Z'</dateFormat>
+                    <dateFormatTimeZone>UTC</dateFormatTimeZone>
+                    <gitDescribe>
+                        <tags>true</tags>
+                        <always>true</always>
+                    </gitDescribe>
+                </configuration>
+            </plugin>
         </plugins>
+
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+            </resource>
+            <resource>
+                <directory>src/main/resources-filtered</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
     </build>
 
     <dependencies>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- QR code generator for the reader tests only; not part of the application (MIT) -->
+            <groupId>io.nayuki</groupId>
+            <artifactId>qrcodegen</artifactId>
+            <version>1.8.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

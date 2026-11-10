@@ -5,4 +5,4 @@
 #   -Detotp.config="$DIR/et-otp.properties"
 # before -jar below.
 DIR="$(cd "$(dirname "$0")" && pwd)"
-exec "$DIR/runtime/bin/java" -Dapple.awt.application.name=et-otp-v2 -jar "$DIR/et-otp-v2.jar" "$@"
+exec "$DIR/runtime/bin/java" -Dapple.awt.application.name=et-OTP-v2 -jar "$DIR/et-otp-v2.jar" "$@"

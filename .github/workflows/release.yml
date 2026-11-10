@@ -238,7 +238,7 @@ jobs:
           | \`${APP_NAME}-${VERSION}-windows-x64-portable.zip\` | Windows: extract and double-click \`${APP_NAME}.bat\`. No installation, Java included. / 展開して \`${APP_NAME}.bat\` をダブルクリック。インストール不要で Java も同梱 |
           | \`${APP_NAME}-${VERSION}-macos-arm64-portable.tar.gz\` | macOS (Apple silicon): extract and double-click \`${APP_NAME}.command\`. Java included. / 展開して \`${APP_NAME}.command\` をダブルクリック。Java を同梱 |
           | \`${APP_NAME}-${VERSION}-linux-x64-portable.tar.gz\` | Linux: extract and run \`sh ${APP_NAME}.sh\`. Java included. / 展開して \`sh ${APP_NAME}.sh\` を実行。Java を同梱 |
-          | \`${APP_NAME}-${VERSION}.jar\` | Any OS with Java 17+: \`java -jar ${APP_NAME}-${VERSION}.jar\` / Java 17 以降が入っている環境向け |
+          | \`${APP_NAME}-${VERSION}.jar\` | Any OS with Java 25+: \`java -jar ${APP_NAME}-${VERSION}.jar\` / Java 25 以降が入っている環境向け |
           | \`SHA256SUMS.txt\` | Checksums / チェックサム |
 
           The portable editions contain a Java runtime built from Amazon Corretto 25 (LTS) and a launcher script; nothing is installed.
