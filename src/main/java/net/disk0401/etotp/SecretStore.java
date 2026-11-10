@@ -7,16 +7,11 @@ package net.disk0401.etotp;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
@@ -340,20 +335,6 @@ final class SecretStore
 
     private static void storeAtomically(Properties p, File file) throws IOException
     {
-        Path target = file.getAbsoluteFile().toPath();
-        Path dir = target.getParent();
-        Path tmp = Files.createTempFile(dir, ".et-otp", ".tmp");
-        try {
-            try (OutputStream os = new FileOutputStream(tmp.toFile())) {
-                p.store(os, "et-otp-v2 soft token configuration");
-            }
-            try {
-                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(tmp);
-        }
+        AtomicFiles.store(p, file, "et-otp-v2 soft token configuration");
     }
 }
