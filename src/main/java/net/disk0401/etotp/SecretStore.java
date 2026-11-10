@@ -5,17 +5,19 @@
  */
 package net.disk0401.etotp;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Arrays;
@@ -47,6 +49,12 @@ final class SecretStore
     /** PBKDF2-HMAC-SHA256 iterations for new files (OWASP 2023 recommendation). */
     static final int DEFAULT_ITERATIONS = 600000;
 
+    /**
+     * Upper bound for the (not yet authenticated) iteration count read from a file, so a corrupted
+     * or tampered file cannot block the application in key derivation.
+     */
+    static final int MAX_ITERATIONS = 10000000;
+
     static final int CURRENT_VERSION = 2;
 
     private static final String PREFIX = "key.1.";
@@ -56,6 +64,8 @@ final class SecretStore
     private static final int SALT_BYTES = 16;
     private static final int IV_BYTES = 12;
     private static final int TAG_BITS = 128;
+    /** Properties that only exist in format version 2 and later. */
+    private static final String[] V2_ONLY = { "kdf", "iterations", "cipher", "iv" };
 
     private static final String LEGACY_KDF = "PBKDF2WithHmacSHA1";
     private static final String LEGACY_CIPHER = "AES/ECB/PKCS5Padding";
@@ -73,11 +83,14 @@ final class SecretStore
     {
         private final byte[] secret;
         private final int version;
+        /** the raw file content the secret was read from, used to detect concurrent changes. */
+        private final byte[] source;
 
-        Result(byte[] secret, int version)
+        Result(byte[] secret, int version, byte[] source)
         {
             this.secret = secret;
             this.version = version;
+            this.source = source;
         }
 
         byte[] secret()
@@ -111,6 +124,12 @@ final class SecretStore
     static void write(File file, byte[] secret, char[] pass, int iterations)
             throws IOException, GeneralSecurityException
     {
+        storeAtomically(encrypt(secret, pass, iterations), file);
+    }
+
+
+    private static Properties encrypt(byte[] secret, char[] pass, int iterations) throws GeneralSecurityException
+    {
         byte[] salt = new byte[SALT_BYTES];
         byte[] iv = new byte[IV_BYTES];
         RANDOM.nextBytes(salt);
@@ -136,7 +155,7 @@ final class SecretStore
         p.setProperty(PREFIX + "salt", Base32.encode(salt));
         p.setProperty(PREFIX + "iv", Base32.encode(iv));
         p.setProperty(PREFIX + "encoded", Base32.encode(enc));
-        storeAtomically(p, file);
+        return p;
     }
 
 
@@ -148,14 +167,23 @@ final class SecretStore
      */
     static Result read(File file, char[] pass) throws IOException, GeneralSecurityException
     {
+        byte[] source = Files.readAllBytes(file.toPath());
         Properties p = new Properties();
-        try (InputStream is = new FileInputStream(file)) {
+        try (InputStream is = new ByteArrayInputStream(source)) {
             p.load(is);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Configuration file is malformed: " + e.getMessage());
         }
 
         String versionText = p.getProperty(PREFIX + "version");
         if (versionText == null) {
-            return new Result(readLegacy(p, pass), 1);
+            // a v2 file with a removed version must not be decrypted with the unauthenticated legacy format
+            for (String name : V2_ONLY) {
+                if (p.getProperty(PREFIX + name) != null) {
+                    throw new IOException("Configuration file is malformed (missing " + PREFIX + "version)");
+                }
+            }
+            return new Result(readLegacy(p, pass), 1, source);
         }
 
         int version;
@@ -177,19 +205,22 @@ final class SecretStore
         } catch (NumberFormatException e) {
             throw new IOException("Invalid iteration count in configuration");
         }
-        if (!KDF.equals(kdf) || !CIPHER.equals(cipher) || iterations < 1) {
+        if (!KDF.equals(kdf) || !CIPHER.equals(cipher) || iterations < 1 || iterations > MAX_ITERATIONS) {
             throw new IOException("Unsupported configuration parameters: " + kdf + ", " + cipher + ", " + iterations);
         }
         byte[] salt = decode(p, "salt");
         byte[] iv = decode(p, "iv");
         byte[] enc = decode(p, "encoded");
+        check(salt.length == SALT_BYTES, "salt", "must be " + SALT_BYTES + " bytes");
+        check(iv.length == IV_BYTES, "iv", "must be " + IV_BYTES + " bytes");
+        check(enc.length > TAG_BITS / 8, "encoded", "too short");
 
         byte[] key = deriveKey(kdf, pass, salt, iterations, KEY_BITS);
         try {
             Cipher c = Cipher.getInstance(cipher);
             c.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(TAG_BITS, iv));
             c.updateAAD(aad(version, kdf, iterations, cipher));
-            return new Result(c.doFinal(enc), version);
+            return new Result(c.doFinal(enc), version, source);
         } finally {
             Arrays.fill(key, (byte) 0);
         }
@@ -201,18 +232,45 @@ final class SecretStore
      * <p>
      * The legacy format cannot detect every wrong password (AES/ECB padding is accepted by chance
      * about once in 256 tries), so the original file is first copied to {@code <file>.v1.bak}.
-     * An existing backup is never overwritten.
+     * An existing backup is never overwritten: if it holds different content, the next free name
+     * {@code <file>.v1.bak.1}, {@code .2}, ... is used.
      *
      * @return the backup file
+     * @throws IOException if the file was changed since it was read
      */
     static File migrate(File file, Result legacy, char[] pass) throws IOException, GeneralSecurityException
     {
-        File backup = new File(file.getPath() + ".v1.bak");
-        if (!backup.exists()) {
-            Files.copy(file.toPath(), backup.toPath());
+        File backup = backup(file, legacy.source);
+        Properties upgraded = encrypt(legacy.secret(), pass, DEFAULT_ITERATIONS);
+        // checked after the slow key derivation: narrows (but cannot close) the window for
+        // overwriting a configuration that another instance saved meanwhile
+        if (!Arrays.equals(legacy.source, Files.readAllBytes(file.toPath()))) {
+            throw new IOException("Configuration file was changed while it was read; not upgraded");
         }
-        write(file, legacy.secret(), pass);
+        storeAtomically(upgraded, file);
         return backup;
+    }
+
+
+    private static File backup(File file, byte[] content) throws IOException
+    {
+        String base = file.getPath() + ".v1.bak";
+        for (int i = 0; i < 1000; i++) {
+            File backup = new File(i == 0 ? base : base + "." + i);
+            if (backup.exists()) {
+                if (Arrays.equals(content, Files.readAllBytes(backup.toPath()))) {
+                    return backup;
+                }
+                continue;
+            }
+            try {
+                Files.write(backup.toPath(), content, StandardOpenOption.CREATE_NEW);
+                return backup;
+            } catch (FileAlreadyExistsException e) {
+                // created concurrently, try the next name
+            }
+        }
+        throw new IOException("Cannot create a backup of " + file + ": too many backups exist");
     }
 
 
@@ -220,6 +278,8 @@ final class SecretStore
     {
         byte[] salt = decode(p, "salt");
         byte[] enc = decode(p, "encoded");
+        check(salt.length > 0, "salt", "empty");
+        check(enc.length > 0 && enc.length % 16 == 0, "encoded", "not a multiple of the AES block size");
         byte[] key = deriveKey(LEGACY_KDF, pass, salt, LEGACY_ITERATIONS, LEGACY_KEY_BITS);
         try {
             Cipher c = Cipher.getInstance(LEGACY_CIPHER);
@@ -265,6 +325,15 @@ final class SecretStore
             return Base32.decode(required(p, name).trim());
         } catch (DecodingException e) {
             throw new IOException("Invalid " + PREFIX + name + " in configuration: " + e.getMessage());
+        }
+    }
+
+
+    /** Reports a malformed value as a configuration error before it reaches the crypto API. */
+    private static void check(boolean valid, String name, String problem) throws IOException
+    {
+        if (!valid) {
+            throw new IOException("Invalid " + PREFIX + name + " in configuration: " + problem);
         }
     }
 
