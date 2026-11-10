@@ -7,6 +7,7 @@ package net.disk0401.etotp;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.Desktop;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
@@ -56,6 +57,7 @@ import javax.swing.JTextField;
 import javax.swing.JTextPane;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 
 import net.disk0401.etotp.Base32.DecodingException;
@@ -98,7 +100,9 @@ public class GUI implements ActionListener
     private JPasswordField settingsPass;
     private JPasswordField settingsConfirm;
     private JLabel settingsFileLabel;
-    private JLabel statusLabel;
+    private JTextArea statusLabel;
+    /** width of the status line in pixels, fixed after the main window was laid out. */
+    private int statusWidth = 300;
     /** status text when upgrading an et-otp 1.x configuration file failed while unlocking, else empty. */
     private String migrationMessage = "";
 
@@ -123,6 +127,7 @@ public class GUI implements ActionListener
 
     private static void start()
     {
+        useSystemLookAndFeel();
         File config = ConfigLocation.resolve();
         GUI gui = new GUI(config, UiSettings.load(UiSettings.locationFor(config)),
                           Locale.getDefault(Locale.Category.DISPLAY));
@@ -132,6 +137,20 @@ public class GUI implements ActionListener
         gui.frame.setVisible(true);
         if (!config.exists()) {
             SwingUtilities.invokeLater(gui::showSetupWizard);
+        }
+    }
+
+
+    /**
+     * Uses the look of the operating system. Its font (for example Yu Gothic UI on Windows) shows
+     * Japanese much better than the default cross-platform look, which falls back to MS Gothic.
+     */
+    private static void useSystemLookAndFeel()
+    {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception | LinkageError ignored) {
+            // keep the default look
         }
     }
 
@@ -174,7 +193,7 @@ public class GUI implements ActionListener
         c.insets = new Insets(10, 10, 20, 10);
         c.anchor = GridBagConstraints.NORTH;
         JLabel label = new JLabel(msg.format("main.title", PROGNAME), SwingConstants.CENTER);
-        label.setFont(new Font(Font.SERIF, Font.BOLD, 16));
+        label.setFont(label.getFont().deriveFont(Font.BOLD, 16f));
         frame.add(label, c);
 
         c.fill = GridBagConstraints.HORIZONTAL;
@@ -286,10 +305,8 @@ public class GUI implements ActionListener
         c.weighty = 0;
         c.anchor = GridBagConstraints.SOUTH;
         c.insets = new Insets(5,5,5,5);
-        // a space keeps the height of the empty status line
-        label = new JLabel(" ", SwingConstants.LEFT);
-        frame.add(label, c);
-        statusLabel = label;
+        statusLabel = createStatusArea();
+        frame.add(statusLabel, c);
 
         frame.addComponentListener(new ShowEvent());
         frame.addWindowListener(new WindowAdapter() {
@@ -302,6 +319,68 @@ public class GUI implements ActionListener
 
         // now we realize the components
         frame.pack();
+        // The status line wraps within the width of the other components and has room for two lines.
+        // A long message must not widen it: GridBagLayout would then shrink every component.
+        statusWidth = Math.max(100, frame.getContentPane().getWidth() - 10);
+        statusLabel.setText("X\nX");
+        reserveStatusHeight();
+        statusLabel.setText("");
+        frame.pack();
+    }
+
+
+    /**
+     * Creates the status line. A wrapping text area is used instead of an HTML label, because
+     * Swing's HTML layout does not break Japanese text correctly.
+     */
+    private static JTextArea createStatusArea()
+    {
+        JTextArea area = new JTextArea();
+        area.setEditable(false);
+        area.setFocusable(false);
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        area.setOpaque(false);
+        area.setBorder(null);
+        area.setFont(UIManager.getFont("Label.font"));
+        return area;
+    }
+
+
+    /** Gives the status line the height of its current text at the fixed width; it never shrinks. */
+    private boolean reserveStatusHeight()
+    {
+        int reserved = statusLabel.isPreferredSizeSet() ? statusLabel.getPreferredSize().height : 0;
+        Dimension old = statusLabel.isPreferredSizeSet() ? statusLabel.getPreferredSize() : null;
+        // measure the wrapped text at the final width, then restore the laid out size
+        Dimension size = statusLabel.getSize();
+        statusLabel.setPreferredSize(null);
+        statusLabel.setSize(statusWidth, Short.MAX_VALUE);
+        int needed = statusLabel.getPreferredSize().height;
+        statusLabel.setSize(size);
+        if (needed <= reserved) {
+            statusLabel.setPreferredSize(old);
+            statusLabel.revalidate();
+            return false;
+        }
+        Dimension d = new Dimension(statusWidth, needed);
+        statusLabel.setPreferredSize(d);
+        statusLabel.setMinimumSize(d);
+        return true;
+    }
+
+
+    /** Shows a message in the status line (in red for errors); the full text is also its tool tip. */
+    private void setStatus(String text, boolean error)
+    {
+        statusLabel.setForeground(error ? Color.RED : UIManager.getColor("Label.foreground"));
+        boolean empty = text == null || text.trim().isEmpty();
+        statusLabel.setText(empty ? "" : text);
+        statusLabel.setToolTipText(empty ? null : text);
+        // grow the window if the message needs more lines than reserved
+        if (!empty && reserveStatusHeight()) {
+            frame.pack();
+        }
     }
 
 
@@ -312,8 +391,9 @@ public class GUI implements ActionListener
     static JTextField createCodeField()
     {
         JTextField text = new JTextField("", CODE_SAMPLE.length() + 1);
-        text.setFont(new Font(Font.DIALOG, Font.BOLD, 16));
+        text.setFont(text.getFont().deriveFont(Font.BOLD, 16f));
         text.setEditable(false);
+        text.setMinimumSize(text.getPreferredSize());
         return text;
     }
 
@@ -375,8 +455,7 @@ public class GUI implements ActionListener
     @Override
     public void actionPerformed(ActionEvent e)
     {
-        statusLabel.setText(" ");
-        statusLabel.setForeground(Color.BLACK);
+        setStatus(null, false);
 
         String command = e.getActionCommand();
         if (CMD_QUIT.equals(command))
@@ -387,7 +466,7 @@ public class GUI implements ActionListener
         else if (CMD_MANUAL.equals(command))
         {
             try {
-                statusLabel.setText(msg.format("status.opening", HELPURL));
+                setStatus(msg.format("status.opening", HELPURL), false);
                 Desktop.getDesktop().browse(new URI(HELPURL));
             } catch (Exception ignored) { /* dont care */ }
         }
@@ -447,7 +526,7 @@ public class GUI implements ActionListener
             s = RFC4226.generateOTP(bytes, counter+1, 6, false, -1);
             textLabel.setText(s);
             Arrays.fill(bytes, (byte) 0);
-            statusLabel.setText(migrationMessage.isEmpty() ? " " : migrationMessage);
+            setStatus(migrationMessage, false);
         }
         catch (BadPaddingException bp)
         {
@@ -478,8 +557,7 @@ public class GUI implements ActionListener
 
     private void errorText(String text)
     {
-        statusLabel.setForeground(Color.RED);
-        statusLabel.setText(text);
+        setStatus(text, true);
     }
 
 
@@ -503,8 +581,7 @@ public class GUI implements ActionListener
     {
         try {
             writeSecret(code, pass);
-            statusLabel.setForeground(Color.BLACK);
-            statusLabel.setText(msg.get("status.saved"));
+            setStatus(msg.get("status.saved"), false);
             return true;
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(parent == null ? frame : parent,
@@ -541,8 +618,7 @@ public class GUI implements ActionListener
         wizard.setLocationRelativeTo(frame);
         wizard.setVisible(true);
         if (!wizard.isCompleted()) {
-            statusLabel.setForeground(Color.BLACK);
-            statusLabel.setText(msg.get("status.setupLater"));
+            setStatus(msg.get("status.setupLater"), false);
         }
         passwordField.requestFocusInWindow();
     }
@@ -753,6 +829,9 @@ public class GUI implements ActionListener
         JTextPane t = new JTextPane();
         t.setContentType("text/html");
         t.setEditable(false);
+        // use the font of the look and feel instead of the HTML default (a serif font, Mincho in Japanese)
+        t.putClientProperty(javax.swing.JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        t.setFont(UIManager.getFont("Label.font"));
         t.setText(aboutHtml(BuildInfo.load()));
         t.setCaretPosition(0);
         d.add(new JScrollPane(t, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER),
