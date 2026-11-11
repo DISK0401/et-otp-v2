@@ -18,6 +18,7 @@ import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.KeyboardFocusManager;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
@@ -25,6 +26,7 @@ import java.awt.Window;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -75,13 +77,18 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
+import javax.swing.KeyStroke;
+import javax.swing.MenuSelectionManager;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.WindowConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.text.JTextComponent;
 
 import net.disk0401.etotp.qr.QrReader;
 
@@ -150,6 +157,13 @@ public class GUI implements AccountRow.Actions
     private JPanel listPanel;
     private final List<AccountRow> rows = new ArrayList<>();
     private final List<JButton> addButtons = new ArrayList<>();
+    /** filters the rows by name (et-otp-v2 issue #20). */
+    private JTextField searchField;
+    /** shown instead of the rows when the filter hides all of them. */
+    private JTextArea noMatchText;
+    /** the index in {@link #rows} chosen with the arrow keys in the search field, or -1. */
+    private int selectedRow = -1;
+    private boolean typingStartsSearch;
     private JTextArea statusLabel;
     private Timer timer;
 
@@ -802,6 +816,14 @@ public class GUI implements AccountRow.Actions
         m.add(menuItem("menu.about", e -> showAbout()));
         mb.add(m);
         frame.setJMenuBar(mb);
+        frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_F, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()), "search");
+        frame.getRootPane().getActionMap().put("search", action(this::focusSearch));
+        if (!typingStartsSearch) {
+            // once: the window is built again when the language changes, the dispatcher checks the current one
+            typingStartsSearch = true;
+            KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(this::typeIntoSearch);
+        }
 
         cards = new JPanel(cardLayout);
         cards.add(buildSetupCard(), CARD_SETUP);
@@ -918,7 +940,10 @@ public class GUI implements AccountRow.Actions
         for (JButton b : addButtons) {
             buttons.add(b);
         }
-        panel.add(buttons, BorderLayout.NORTH);
+        JPanel north = new JPanel(new BorderLayout());
+        north.add(buttons, BorderLayout.NORTH);
+        north.add(buildSearchBar(), BorderLayout.SOUTH);
+        panel.add(north, BorderLayout.NORTH);
 
         listPanel = new JPanel();
         listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
@@ -933,6 +958,194 @@ public class GUI implements AccountRow.Actions
         scroll.setPreferredSize(new Dimension(Math.max(460, buttons.getPreferredSize().width), 300));
         panel.add(scroll, BorderLayout.CENTER);
         return panel;
+    }
+
+
+    private JPanel buildSearchBar()
+    {
+        JPanel bar = new JPanel(new BorderLayout(6, 0));
+        bar.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+        JLabel label = new JLabel(msg.get("search.label"));
+        searchField = new JTextField();
+        label.setLabelFor(searchField);
+        boolean mac = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx() == InputEvent.META_DOWN_MASK;
+        searchField.setToolTipText(msg.format("search.tip", mac ? "\u2318F" : "Ctrl+F"));
+        searchField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e)
+            {
+                applyFilter(true);
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e)
+            {
+                applyFilter(true);
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e)
+            {
+                applyFilter(true);
+            }
+        });
+        bind(searchField, KeyEvent.VK_UP, "selectUp", () -> moveSelection(-1));
+        bind(searchField, KeyEvent.VK_DOWN, "selectDown", () -> moveSelection(1));
+        bind(searchField, KeyEvent.VK_ENTER, "copySelected", this::copySelected);
+        bind(searchField, KeyEvent.VK_ESCAPE, "clearSearch", () -> searchField.setText(""));
+        bar.add(label, BorderLayout.WEST);
+        bar.add(searchField, BorderLayout.CENTER);
+        return bar;
+    }
+
+
+    private static void bind(JComponent c, int key, String name, Runnable r)
+    {
+        c.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(key, 0), name);
+        c.getActionMap().put(name, action(r));
+    }
+
+
+    private static javax.swing.Action action(Runnable r)
+    {
+        return new javax.swing.AbstractAction() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e)
+            {
+                r.run();
+            }
+        };
+    }
+
+
+    private void focusSearch()
+    {
+        if (CARD_LIST.equals(card) && searchField != null) {
+            searchField.requestFocusInWindow();
+            searchField.selectAll();
+        }
+    }
+
+
+    /**
+     * Typing a character while the list has the focus (on a button, not in a text field) starts the search
+     * with it. Space and keys with Ctrl, Alt or Cmd keep their meaning (buttons, mnemonics, shortcuts).
+     * An input method cannot start on a button, so Japanese is typed after Ctrl+F.
+     *
+     * @return true if the character was put into the search field
+     */
+    private boolean typeIntoSearch(KeyEvent e)
+    {
+        if (e.getID() != KeyEvent.KEY_TYPED || frame == null || !frame.isActive() || !CARD_LIST.equals(card)
+            || searchField == null || !searchField.isShowing()) {
+            return false;
+        }
+        char c = e.getKeyChar();
+        if (c == KeyEvent.CHAR_UNDEFINED || Character.isISOControl(c) || Character.isWhitespace(c)) {
+            return false;
+        }
+        int mods = e.getModifiersEx();
+        int ctrlAlt = InputEvent.CTRL_DOWN_MASK | InputEvent.ALT_DOWN_MASK;
+        boolean altGraph = (mods & ctrlAlt) == ctrlAlt || (mods & InputEvent.ALT_GRAPH_DOWN_MASK) != 0;
+        if (!altGraph && (mods & (ctrlAlt | InputEvent.META_DOWN_MASK)) != 0) {
+            return false;
+        }
+        Component owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if (owner instanceof JTextComponent || MenuSelectionManager.defaultManager().getSelectedPath().length > 0) {
+            return false;
+        }
+        searchField.requestFocusInWindow();
+        searchField.setCaretPosition(searchField.getDocument().getLength());
+        searchField.replaceSelection(String.valueOf(c));
+        e.consume();
+        return true;
+    }
+
+
+    /** Shows only the rows whose name contains the search text. */
+    private void applyFilter(boolean clearSelection)
+    {
+        if (listPanel == null) {
+            return;
+        }
+        String query = searchField == null ? "" : searchField.getText();
+        int shown = 0;
+        for (AccountRow row : rows) {
+            boolean match = AccountList.matches(row.shownName(), query);
+            row.setVisible(match);
+            if (match) {
+                shown++;
+            }
+        }
+        if (clearSelection) {
+            selectedRow = -1;
+        }
+        if (noMatchText != null) {
+            noMatchText.setText(msg.format("search.none", query.trim()));
+            noMatchText.setVisible(!rows.isEmpty() && shown == 0);
+        }
+        showSelection();
+        listPanel.revalidate();
+        listPanel.repaint();
+    }
+
+
+    private List<Integer> shownRows()
+    {
+        List<Integer> shown = new ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            if (rows.get(i).isVisible()) {
+                shown.add(i);
+            }
+        }
+        return shown;
+    }
+
+
+    /** Chooses the next (1) or the previous (-1) shown row. */
+    private void moveSelection(int step)
+    {
+        List<Integer> shown = shownRows();
+        if (shown.isEmpty()) {
+            return;
+        }
+        int pos = shown.indexOf(selectedRow);
+        if (pos < 0) {
+            pos = step > 0 ? 0 : shown.size() - 1;
+        } else {
+            pos = Math.max(0, Math.min(shown.size() - 1, pos + step));
+        }
+        selectedRow = shown.get(pos);
+        showSelection();
+    }
+
+
+    private void showSelection()
+    {
+        for (int i = 0; i < rows.size(); i++) {
+            rows.get(i).setSelected(i == selectedRow, listPanel.getBackground());
+        }
+        if (selectedRow >= 0 && selectedRow < rows.size()) {
+            AccountRow row = rows.get(selectedRow);
+            // after the layout, when the row has its place
+            SwingUtilities.invokeLater(() -> row.scrollRectToVisible(new Rectangle(row.getSize())));
+        }
+    }
+
+
+    /** Enter in the search field: copies the code of the chosen row, or of the only shown row. */
+    private void copySelected()
+    {
+        List<Integer> shown = shownRows();
+        int index = shown.contains(selectedRow) ? selectedRow : shown.size() == 1 ? shown.get(0) : -1;
+        if (index >= 0) {
+            AccountRow row = rows.get(index);
+            copy(row.account(), row.code());
+        } else if (shown.size() > 1) {
+            setStatus(msg.get("search.choose"), false);
+        }
     }
 
 
@@ -981,8 +1194,12 @@ public class GUI implements AccountRow.Actions
             rows.add(row);
             listPanel.add(row);
         }
-        listPanel.revalidate();
-        listPanel.repaint();
+        noMatchText = createStatusArea();
+        noMatchText.setBorder(BorderFactory.createEmptyBorder(20, 15, 20, 15));
+        noMatchText.setAlignmentX(Component.LEFT_ALIGNMENT);
+        noMatchText.setVisible(false);
+        listPanel.add(noMatchText);
+        applyFilter(true);
     }
 
 
@@ -1076,6 +1293,7 @@ public class GUI implements AccountRow.Actions
         for (AccountRow row : rows) {
             row.refreshName();
         }
+        applyFilter(false); // the new name may (not) match the search text
     }
 
 
@@ -1096,6 +1314,51 @@ public class GUI implements AccountRow.Actions
         }
         rebuildList();
         setStatus(msg.format("status.deleted", displayName(account)), false);
+    }
+
+
+    @Override
+    public boolean canMove(Account account, AccountRow.Move where)
+    {
+        // while filtered, the neighbors in the list are not the ones shown
+        if (readOnlyReason != null || (searchField != null && AccountList.filters(searchField.getText()))) {
+            return false;
+        }
+        int index = indexOf(account);
+        return where == AccountRow.Move.DOWN ? index >= 0 && index < accounts.size() - 1 : index > 0;
+    }
+
+
+    @Override
+    public void move(Account account, AccountRow.Move where)
+    {
+        if (!canMove(account, where)) {
+            return;
+        }
+        int from = indexOf(account);
+        int to = where == AccountRow.Move.UP ? from - 1 : where == AccountRow.Move.DOWN ? from + 1 : 0;
+        AccountList.move(accounts, from, to);
+        if (!persist()) {
+            AccountList.move(accounts, to, from);
+            return;
+        }
+        rebuildList();
+        selectedRow = to;
+        showSelection();
+        // keep the keyboard on the moved row, so it can be moved again
+        rows.get(to).editButton().requestFocusInWindow();
+    }
+
+
+    /** @return the index of this very account (two registrations of the same key are equal) */
+    private int indexOf(Account account)
+    {
+        for (int i = 0; i < accounts.size(); i++) {
+            if (accounts.get(i) == account) {
+                return i;
+            }
+        }
+        return -1;
     }
 
 
@@ -1366,6 +1629,7 @@ public class GUI implements AccountRow.Actions
             accounts.remove(account);
             return;
         }
+        searchField.setText(""); // the new service is shown even if the list was filtered
         rebuildList();
         setStatus(msg.format("status.added", displayName(account)), false);
     }
