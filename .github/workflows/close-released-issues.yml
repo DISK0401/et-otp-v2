@@ -1,0 +1,33 @@
+name: Close released issues
+
+# Closes the issues marked "fixed in develop" (see issue-status.yml) whose fix is contained in the
+# published release, with a comment that links the release. See RELEASING.md.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of the published release, for example v2.2.0
+        required: true
+      dry_run:
+        description: Only list the issues that would be closed
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Close the released issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          URL: ${{ github.event.release.html_url || format('{0}/{1}/releases/tag/{2}', github.server_url, github.repository, inputs.tag) }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: bash .github/scripts/issue-status.sh release "$TAG" "$URL"
