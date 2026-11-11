@@ -68,6 +68,31 @@ class AccountStoreTest
         assertEquals(AccountStore.Kind.MISSING, AccountStore.inspect(new File(tmp, "none.properties")));
     }
 
+    /** et-otp-v2 issue #20: the order is the order of the list, kept without a new key or format. */
+    @Test
+    void theOrderIsKeptWithoutNewKeys() throws Exception
+    {
+        File f = new File(tmp, "c.properties");
+        List<Account> list = new java.util.ArrayList<>(accounts());
+        list.add(new Account("Third", "MFRGGZDFMZTWQ2LK"));
+        assertTrue(AccountList.move(list, 2, 0));
+        SecretStore.PasswordKey key = SecretStore.PasswordKey.create("pw".toCharArray(), TEST_ITERATIONS);
+        AccountStore.save(f, list, AccountStore.Protection.PASSWORD, key, null);
+
+        AccountStore.Opened o = AccountStore.openWithPassword(f, "pw".toCharArray());
+        assertEquals(List.of("Third", "GitHub (me)", "日本語のサービス"),
+                     o.accounts.stream().map(Account::name).toList());
+
+        // the same keys as before, so older versions read the list (in this order) as well
+        java.util.Properties p = new java.util.Properties();
+        p.load(new java.io.StringReader(new String(AccountStore.serialize(list), java.nio.charset.StandardCharsets.UTF_8)));
+        for (String name : p.stringPropertyNames()) {
+            assertTrue(name.equals("count") || name.matches("account[.][1-3][.](name|secret|algorithm|digits|period)"),
+                       name);
+        }
+        assertEquals("Third", p.getProperty("account.1.name"));
+    }
+
     @Test
     void passwordRoundTrip() throws Exception
     {

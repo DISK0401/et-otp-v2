@@ -23,6 +23,7 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 - The user interface is in English and Japanese. It is shown in Japanese if the language of the OS is Japanese, else in English, and can be switched on the General tab of the settings.
 - When started without a configuration file, a setup wizard opens. It asks for the protection and the location of the configuration file and, on Windows, can create a desktop shortcut. You can also choose an existing configuration file and keep using it.
 - The window opens where it was when the program was last closed.
+- Type part of a name into the search field to show only those services; choose one with the up and down keys and press Enter to copy its code. The edit menu changes the order of the services.
 - Started with `--code <name>`, it writes the code without opening the window, for batch files and scripts.
 
 ## Requirements

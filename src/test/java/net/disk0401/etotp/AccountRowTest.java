@@ -23,6 +23,15 @@ class AccountRowTest
 
         @Override
         public void delete(Account account) { }
+
+        @Override
+        public boolean canMove(Account account, AccountRow.Move where)
+        {
+            return false;
+        }
+
+        @Override
+        public void move(Account account, AccountRow.Move where) { }
     };
 
     /** et-otp issue #1: the code must not change the size of the row when it changes. */
