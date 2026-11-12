@@ -61,13 +61,8 @@ Issue は、対応した変更を含むリリースを公開したときに閉�
    | `SHA256SUMS.txt` | チェックサム |
 
 5. Draft の変更履歴（英語と日本語）を読み、必要なら直してから「Publish release」で公開します。公開したときに、マージしたコミットに `v<バージョン>` のタグが付きます。また、このリリースに含まれる Issue が閉じます（「Issue を閉じるタイミング」を参照）。
-6. `develop` のバージョンを次の開発用バージョンに上げます。
 
-   ```sh
-   mvn versions:set -DnewVersion=2.0.1-SNAPSHOT -DgenerateBackupFiles=false
-   git commit -am "Start 2.0.1 development"
-   git push
-   ```
+リリースしたあとも、`develop` のバージョンは次のリリースの手順1まで変えません。
 
 ## 変更履歴の自動生成
 
