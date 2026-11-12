@@ -38,6 +38,8 @@
       <li>Registers a service by reading the QR code shown on the screen; on Windows also from a window behind other windows. A QR code image file or the key typed in also works.</li>
       <li>Stores the services encrypted. On Windows, choose between protection for your Windows user (no password) and a password; on macOS and Linux a password is used.</li>
       <li>English and Japanese user interface.</li>
+      <li>With password protection, locks again after a time without use or when the computer is locked.</li>
+      <li>Filters the services by name and copies a code with the keyboard only; the order of the services can be changed.</li>
     </ul>
   </section>
 
@@ -67,7 +69,11 @@
       <li>Type the code shown by et-otp-v2 into the setup page of the service. Without this step the service does not complete the setup.</li>
     </ol>
     <p>If no QR code is found, check that it is not too small (enlarge the page with Ctrl and +). With a QR code image file use <b>QR code image file...</b>, and with the key (a text of letters and digits) use <b>Enter key...</b>.</p>
+    <p>With many services, type part of a name into the search field: only the services whose name contains the text are shown. Case and the difference of full width and half width characters are ignored. When a button of the window has the focus, typing letters or digits starts the search; for Japanese, press <b>Ctrl+F</b> (<b>⌘F</b> on macOS) to go to the search field first. If one service is shown, <b>Enter</b> copies its code; with several, choose one with the up and down keys first. <b>Esc</b> shows all services again.</p>
+    <p>To change the order, press <b>Edit</b> of a service or right-click its row, and choose <b>Move up</b>, <b>Move down</b> or <b>Move to top</b>. The order is saved in the configuration file, and <code>--list</code> on the command line uses it as well. While the list is filtered, the order cannot be changed.</p>
     <p>The services are saved to <code>.et-otp.properties</code> in your home folder. To move the file to another folder or name, open <b>et-OTP-v2 → Settings</b> and press <b>Move...</b> on the <b>General</b> tab. The chosen location is remembered in <code>.et-otp-location.properties</code> in your home folder and used on the next start; a desktop shortcut created by et-otp-v2 is updated as well. Without a chosen location, a <code>.et-otp.properties</code> in the working directory is used if it exists (same as et-otp 1.x). <b>Help → About</b> shows the full path. The language and the window position are saved to <code>.et-otp-ui.properties</code> in the same folder.</p>
+    <p>With password protection, the services are locked again so that nobody can see the codes while you are away. Locking removes the codes from the window and asks for the password again; a code you copied is also removed from the clipboard if it is still there. Open dialogs (entering a key, the settings) are closed, and unconfirmed changes are not saved. By default, et-otp-v2 locks after 5 minutes without use, and when the computer is locked or sleeps. Change this on the <b>Lock</b> tab of <b>et-OTP-v2 → Settings</b>, where locking when the window is minimized can be switched on as well. To lock at once, choose <b>et-OTP-v2 → Lock</b> (<b>Ctrl+L</b>, <b>⌘L</b> on macOS). A locked computer is detected on Windows only; on macOS and Linux, et-otp-v2 locks after the time without use and after sleep. With protection for your Windows user, no password is needed to open the services, so they are not locked.</p>
+    <p>When locking, the key derived from the password is overwritten in memory. The keys of the services are Java strings, which cannot be overwritten; they are freed later as unused memory.</p>
     <p>The protection can be changed on the <b>Protection</b> tab of <b>et-OTP-v2 → Settings</b>. Services protected for your Windows user cannot be read on another computer or by another Windows user, so on a new computer you register them again. Keep the backup codes (recovery codes) of your services somewhere other than the computer.</p>
     <p>The user interface follows the language of the OS: Japanese on a Japanese system, English otherwise. To change it, open <b>et-OTP-v2 → Settings</b> and select the language on the <b>General</b> tab.</p>
   </section>
@@ -79,12 +85,24 @@
 if not defined MFA_CODE exit /b 1</code></pre>
     <ul>
       <li>The name is the name shown in et-otp-v2. If no service has exactly this name, the case is ignored. <code>--list</code> writes the names of the registered services.</li>
-      <li>If the services are protected with a password, you are asked for it; the password is not shown while you type. With protection for your Windows user, the code is written without a question.</li>
+      <li>If the services are protected with a password, you are asked for it (not with <code>--password-stdin</code>); the password is not shown while you type. With protection for your Windows user, the code is written without a question.</li>
       <li>If the code changes within 3 seconds, the next code is waited for and written.</li>
-      <li>Only the code goes to the standard output; the password prompt and errors go to the standard error output. The exit code is 0 when done, 1 when failed and 2 for wrong options.</li>
+      <li>Only the code (with <code>--json</code> the JSON) goes to the standard output; the password prompt and errors go to the standard error output. The exit code is 0 when done, 1 when failed and 2 for wrong options.</li>
       <li>The configuration file is only read, so this also works while the window is open. Files in the format of et-otp 1.x and et-otp-v2 2.0 cannot be read: open them once in the window to convert them first.</li>
       <li>With the portable edition for macOS run <code>sh et-otp-v2.command --code AWS</code>, for Linux <code>sh et-otp-v2.sh --code AWS</code>, with the plain JAR <code>java -jar et-otp-v2-&lt;version&gt;.jar --code AWS</code>.</li>
     </ul>
+    <p>More options; <code>--help</code> lists them:</p>
+    <ul>
+      <li><code>--copy</code>: copies the code to the clipboard instead of writing it. The copied code is not removed later. On Linux without an app that keeps the clipboard, the copied code is gone when et-otp-v2 ends.</li>
+      <li><code>--next</code>: writes the code of the next period, without waiting for the code to change.</li>
+      <li><code>--json</code>: writes the result as JSON. For <code>--code</code>: the name (<code>name</code>), the code (<code>code</code>), the seconds left (<code>secondsLeft</code>), the period (<code>period</code>) and the next code (<code>next</code>). Characters outside ASCII are written as <code>\uXXXX</code>, so the encoding of the console does not matter.</li>
+      <li><code>--password-stdin</code>: reads the password from the first line of the standard input. This works without a console, for example in the Task Scheduler or when called from another program. A wrong password fails without asking again.</li>
+      <li><code>--config &lt;file&gt;</code>: uses this configuration file.</li>
+      <li><code>--version</code>: writes the version.</li>
+    </ul>
+    <p>For <code>--password-stdin</code>, give the password for example from a file that other users cannot read:</p>
+    <pre><code>"C:\tools\et-otp-v2\et-otp-v2.bat" --code AWS --password-stdin &lt; "%USERPROFILE%\secret\et-otp-password.txt"</code></pre>
+    <p>There is no way to give the password in an environment variable or as an argument: arguments can be seen by other programs, and environment variables can be read by other programs of the same user and are passed on to the programs started. <code>echo password | ...</code> works as well, but cmd starts the left side of the pipe as another cmd, whose command line, with the password, can be seen by other programs; the password also stays in the batch file or the command history. In cmd, <code>echo password | ...</code> also passes the space before the "|": write <code>echo password| ...</code> without the space.</p>
   </section>
 
   <section id="upgrade">
@@ -108,7 +126,7 @@ if not defined MFA_CODE exit /b 1</code></pre>
   <section id="license">
     <h2>License and credits</h2>
     <p>et-otp-v2 is free software under the <a href="https://github.com/DISK0401/et-otp-v2/blob/main/LICENSE">GNU General Public License v2.0 only</a>.</p>
-    <p>It is a continuation of <a href="https://github.com/ecki/et-otp">et-otp</a> by Bernd Eckenfels. It includes code from the HOTP reference implementation in RFC 4226, the Base32 implementation of the Google Authenticator project, and a Java port of the QR code decoder <a href="https://github.com/dlbeer/quirc">quirc</a> by Daniel Beer (ISC license).</p>
+    <p>It is a continuation of <a href="https://github.com/ecki/et-otp">et-otp</a> by Bernd Eckenfels. It includes a Java port of the QR code decoder <a href="https://github.com/dlbeer/quirc">quirc</a> by Daniel Beer (ISC license).</p>
   </section>
 </main>
 

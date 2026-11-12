@@ -12,12 +12,14 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Desktop;
+import java.awt.Dialog;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.KeyboardFocusManager;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
@@ -25,6 +27,8 @@ import java.awt.Window;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.AWTEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -70,18 +74,26 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JRadioButton;
+import javax.swing.JCheckBox;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
+import javax.swing.KeyStroke;
+import javax.swing.MenuSelectionManager;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.WindowConstants;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.text.JTextComponent;
 
 import net.disk0401.etotp.qr.QrReader;
 
@@ -150,8 +162,23 @@ public class GUI implements AccountRow.Actions
     private JPanel listPanel;
     private final List<AccountRow> rows = new ArrayList<>();
     private final List<JButton> addButtons = new ArrayList<>();
+    /** filters the rows by name (et-otp-v2 issue #20). */
+    private JTextField searchField;
+    /** shown instead of the rows when the filter hides all of them. */
+    private JTextArea noMatchText;
+    /** the index in {@link #rows} chosen with the arrow keys in the search field, or -1. */
+    private int selectedRow = -1;
+    private boolean typingStartsSearch;
     private JTextArea statusLabel;
     private Timer timer;
+    /** locking after idle time and sleep (issue #22). */
+    private final AutoLock autoLock = new AutoLock(System.currentTimeMillis());
+    private final ClipboardGuard clipboard = new ClipboardGuard(Toolkit.getDefaultToolkit().getSystemClipboard());
+    /** a lock waits for the open dialogs to close, so their changes are saved first. */
+    private boolean lockPending;
+    /** true from a lock until the list is opened again. */
+    private boolean locked;
+    private JMenuItem lockItem;
 
     private JDialog settingsDialog;
     private JDialog aboutDialog;
@@ -183,7 +210,8 @@ public class GUI implements AccountRow.Actions
     }
 
 
-    private static void start()
+    /** @return the started window, or null if another instance runs (package-private for tests) */
+    static GUI start()
     {
         useSystemLookAndFeel();
         File config = ConfigLocation.resolve();
@@ -196,14 +224,24 @@ public class GUI implements AccountRow.Actions
             JOptionPane.showMessageDialog(null, gui.msg.format("error.running", config.getAbsolutePath()),
                                           PROGNAME, JOptionPane.INFORMATION_MESSAGE);
             System.exit(0);
-            return;
+            return null;
         }
         gui.buildMainFrame();
         gui.placeWindow(gui.uiSettings.windowLocation());
         gui.frame.setVisible(true);
         gui.timer = new Timer(1000, e -> gui.tick());
         gui.timer.start();
+        // every key and mouse input in a window of the program counts as use
+        Toolkit.getDefaultToolkit().addAWTEventListener(e -> gui.autoLock.input(System.currentTimeMillis()),
+            AWTEvent.KEY_EVENT_MASK | AWTEvent.MOUSE_EVENT_MASK | AWTEvent.MOUSE_MOTION_EVENT_MASK
+            | AWTEvent.MOUSE_WHEEL_EVENT_MASK);
+        SessionWatcher.start(() -> SwingUtilities.invokeLater(() -> {
+            if (gui.uiSettings.lockOnSystemLock()) {
+                gui.requestLock();
+            }
+        }));
         gui.open();
+        return gui;
     }
 
 
@@ -356,6 +394,10 @@ public class GUI implements AccountRow.Actions
         fileContent = o.source;
         readOnlyReason = o.readOnlyReason != null ? o.readOnlyReason : lockProblem;
         opened = true;
+        lockPending = false;
+        locked = false;
+        autoLock.reset(System.currentTimeMillis());
+        updateLockItem();
         rebuildList();
         showCard(CARD_LIST);
         setBusy(false);
@@ -411,6 +453,12 @@ public class GUI implements AccountRow.Actions
     /** Saves the account list. @return false if it failed (an error dialog was shown) */
     private boolean persist()
     {
+        if (locked || lockPending) {
+            // a change confirmed after the lock was requested may not come from the user: not saved,
+            // the caller restores the previous state
+            setStatus(msg.get("status.lockedNotSaved"), true);
+            return false;
+        }
         if (readOnlyReason != null) {
             JOptionPane.showMessageDialog(frame, msg.format("status.readOnly", readOnlyReason),
                                           msg.get("error.save.title"), JOptionPane.ERROR_MESSAGE);
@@ -652,10 +700,14 @@ public class GUI implements AccountRow.Actions
     /** Lets the user choose a new location and moves the opened configuration file there. */
     private void moveConfig()
     {
-        if (!opened || readOnlyReason != null) {
+        if (!opened || readOnlyReason != null || lockPending) {
             return;
         }
         File chosen = chooseLocation(settingsDialog, msg, configFile);
+        if (lockPending || locked) {
+            setStatus(msg.get("status.lockedNotSaved"), true); // chosen after the lock was requested
+            return;
+        }
         if (chosen == null || sameFile(chosen, configFile)) {
             return;
         }
@@ -790,6 +842,11 @@ public class GUI implements AccountRow.Actions
         JMenu m = new JMenu(PROGNAME);
         m.setMnemonic(KeyEvent.VK_E);
         m.add(menuItem("menu.settings", e -> showSettings(opened ? 0 : 1)));
+        lockItem = menuItem("menu.lock", e -> requestLock());
+        lockItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_L,
+                                                       Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        lockItem.setEnabled(canLock());
+        m.add(lockItem);
         if (DesktopShortcut.isSupported()) {
             m.add(menuItem("menu.shortcut", e -> createShortcut()));
         }
@@ -802,6 +859,14 @@ public class GUI implements AccountRow.Actions
         m.add(menuItem("menu.about", e -> showAbout()));
         mb.add(m);
         frame.setJMenuBar(mb);
+        frame.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_F, Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()), "search");
+        frame.getRootPane().getActionMap().put("search", action(this::focusSearch));
+        if (!typingStartsSearch) {
+            // once: the window is built again when the language changes, the dispatcher checks the current one
+            typingStartsSearch = true;
+            KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(this::typeIntoSearch);
+        }
 
         cards = new JPanel(cardLayout);
         cards.add(buildSetupCard(), CARD_SETUP);
@@ -833,6 +898,14 @@ public class GUI implements AccountRow.Actions
             {
                 saveWindowLocation();
                 finishShortcuts();
+            }
+
+            @Override
+            public void windowIconified(WindowEvent e)
+            {
+                if (uiSettings.lockOnMinimize()) {
+                    requestLock();
+                }
             }
         });
 
@@ -918,7 +991,10 @@ public class GUI implements AccountRow.Actions
         for (JButton b : addButtons) {
             buttons.add(b);
         }
-        panel.add(buttons, BorderLayout.NORTH);
+        JPanel north = new JPanel(new BorderLayout());
+        north.add(buttons, BorderLayout.NORTH);
+        north.add(buildSearchBar(), BorderLayout.SOUTH);
+        panel.add(north, BorderLayout.NORTH);
 
         listPanel = new JPanel();
         listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
@@ -933,6 +1009,194 @@ public class GUI implements AccountRow.Actions
         scroll.setPreferredSize(new Dimension(Math.max(460, buttons.getPreferredSize().width), 300));
         panel.add(scroll, BorderLayout.CENTER);
         return panel;
+    }
+
+
+    private JPanel buildSearchBar()
+    {
+        JPanel bar = new JPanel(new BorderLayout(6, 0));
+        bar.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+        JLabel label = new JLabel(msg.get("search.label"));
+        searchField = new JTextField();
+        label.setLabelFor(searchField);
+        boolean mac = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx() == InputEvent.META_DOWN_MASK;
+        searchField.setToolTipText(msg.format("search.tip", mac ? "\u2318F" : "Ctrl+F"));
+        searchField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e)
+            {
+                applyFilter(true);
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e)
+            {
+                applyFilter(true);
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e)
+            {
+                applyFilter(true);
+            }
+        });
+        bind(searchField, KeyEvent.VK_UP, "selectUp", () -> moveSelection(-1));
+        bind(searchField, KeyEvent.VK_DOWN, "selectDown", () -> moveSelection(1));
+        bind(searchField, KeyEvent.VK_ENTER, "copySelected", this::copySelected);
+        bind(searchField, KeyEvent.VK_ESCAPE, "clearSearch", () -> searchField.setText(""));
+        bar.add(label, BorderLayout.WEST);
+        bar.add(searchField, BorderLayout.CENTER);
+        return bar;
+    }
+
+
+    private static void bind(JComponent c, int key, String name, Runnable r)
+    {
+        c.getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(key, 0), name);
+        c.getActionMap().put(name, action(r));
+    }
+
+
+    private static javax.swing.Action action(Runnable r)
+    {
+        return new javax.swing.AbstractAction() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e)
+            {
+                r.run();
+            }
+        };
+    }
+
+
+    private void focusSearch()
+    {
+        if (CARD_LIST.equals(card) && searchField != null) {
+            searchField.requestFocusInWindow();
+            searchField.selectAll();
+        }
+    }
+
+
+    /**
+     * Typing a character while the list has the focus (on a button, not in a text field) starts the search
+     * with it. Space and keys with Ctrl, Alt or Cmd keep their meaning (buttons, mnemonics, shortcuts).
+     * An input method cannot start on a button, so Japanese is typed after Ctrl+F.
+     *
+     * @return true if the character was put into the search field
+     */
+    private boolean typeIntoSearch(KeyEvent e)
+    {
+        if (e.getID() != KeyEvent.KEY_TYPED || frame == null || !frame.isActive() || !CARD_LIST.equals(card)
+            || searchField == null || !searchField.isShowing()) {
+            return false;
+        }
+        char c = e.getKeyChar();
+        if (c == KeyEvent.CHAR_UNDEFINED || Character.isISOControl(c) || Character.isWhitespace(c)) {
+            return false;
+        }
+        int mods = e.getModifiersEx();
+        int ctrlAlt = InputEvent.CTRL_DOWN_MASK | InputEvent.ALT_DOWN_MASK;
+        boolean altGraph = (mods & ctrlAlt) == ctrlAlt || (mods & InputEvent.ALT_GRAPH_DOWN_MASK) != 0;
+        if (!altGraph && (mods & (ctrlAlt | InputEvent.META_DOWN_MASK)) != 0) {
+            return false;
+        }
+        Component owner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if (owner instanceof JTextComponent || MenuSelectionManager.defaultManager().getSelectedPath().length > 0) {
+            return false;
+        }
+        searchField.requestFocusInWindow();
+        searchField.setCaretPosition(searchField.getDocument().getLength());
+        searchField.replaceSelection(String.valueOf(c));
+        e.consume();
+        return true;
+    }
+
+
+    /** Shows only the rows whose name contains the search text. */
+    private void applyFilter(boolean clearSelection)
+    {
+        if (listPanel == null) {
+            return;
+        }
+        String query = searchField == null ? "" : searchField.getText();
+        int shown = 0;
+        for (AccountRow row : rows) {
+            boolean match = AccountList.matches(row.shownName(), query);
+            row.setVisible(match);
+            if (match) {
+                shown++;
+            }
+        }
+        if (clearSelection) {
+            selectedRow = -1;
+        }
+        if (noMatchText != null) {
+            noMatchText.setText(msg.format("search.none", query.trim()));
+            noMatchText.setVisible(!rows.isEmpty() && shown == 0);
+        }
+        showSelection();
+        listPanel.revalidate();
+        listPanel.repaint();
+    }
+
+
+    private List<Integer> shownRows()
+    {
+        List<Integer> shown = new ArrayList<>();
+        for (int i = 0; i < rows.size(); i++) {
+            if (rows.get(i).isVisible()) {
+                shown.add(i);
+            }
+        }
+        return shown;
+    }
+
+
+    /** Chooses the next (1) or the previous (-1) shown row. */
+    private void moveSelection(int step)
+    {
+        List<Integer> shown = shownRows();
+        if (shown.isEmpty()) {
+            return;
+        }
+        int pos = shown.indexOf(selectedRow);
+        if (pos < 0) {
+            pos = step > 0 ? 0 : shown.size() - 1;
+        } else {
+            pos = Math.max(0, Math.min(shown.size() - 1, pos + step));
+        }
+        selectedRow = shown.get(pos);
+        showSelection();
+    }
+
+
+    private void showSelection()
+    {
+        for (int i = 0; i < rows.size(); i++) {
+            rows.get(i).setSelected(i == selectedRow, listPanel.getBackground());
+        }
+        if (selectedRow >= 0 && selectedRow < rows.size()) {
+            AccountRow row = rows.get(selectedRow);
+            // after the layout, when the row has its place
+            SwingUtilities.invokeLater(() -> row.scrollRectToVisible(new Rectangle(row.getSize())));
+        }
+    }
+
+
+    /** Enter in the search field: copies the code of the chosen row, or of the only shown row. */
+    private void copySelected()
+    {
+        List<Integer> shown = shownRows();
+        int index = shown.contains(selectedRow) ? selectedRow : shown.size() == 1 ? shown.get(0) : -1;
+        if (index >= 0) {
+            AccountRow row = rows.get(index);
+            copy(row.account(), row.code());
+        } else if (shown.size() > 1) {
+            setStatus(msg.get("search.choose"), false);
+        }
     }
 
 
@@ -981,14 +1245,24 @@ public class GUI implements AccountRow.Actions
             rows.add(row);
             listPanel.add(row);
         }
-        listPanel.revalidate();
-        listPanel.repaint();
+        noMatchText = createStatusArea();
+        noMatchText.setBorder(BorderFactory.createEmptyBorder(20, 15, 20, 15));
+        noMatchText.setAlignmentX(Component.LEFT_ALIGNMENT);
+        noMatchText.setVisible(false);
+        listPanel.add(noMatchText);
+        applyFilter(true);
     }
 
 
     private void tick()
     {
-        long now = System.currentTimeMillis() / 1000;
+        long millis = System.currentTimeMillis();
+        AutoLock.Reason reason = autoLock.tick(millis, uiSettings.lockIdleMinutes(), uiSettings.lockOnSystemLock());
+        if (reason != null || lockPending) {
+            requestLock();
+        }
+        updateLockItem(); // the protection may have changed in the settings
+        long now = millis / 1000;
         for (AccountRow row : rows) {
             row.update(now);
         }
@@ -1055,7 +1329,7 @@ public class GUI implements AccountRow.Actions
     @Override
     public void copy(Account account, String code)
     {
-        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(code), null);
+        clipboard.copy(code);
         setStatus(msg.format("status.copied", displayName(account)), false);
     }
 
@@ -1063,9 +1337,12 @@ public class GUI implements AccountRow.Actions
     @Override
     public void rename(Account account)
     {
+        if (!opened || lockPending) {
+            return; // chosen in a menu that was open when locking
+        }
         Object name = JOptionPane.showInputDialog(frame, msg.get("rename.prompt"), msg.get("row.rename"),
                                                   JOptionPane.PLAIN_MESSAGE, null, null, account.name());
-        if (name == null) {
+        if (name == null || !opened) {
             return;
         }
         String old = account.name();
@@ -1076,19 +1353,23 @@ public class GUI implements AccountRow.Actions
         for (AccountRow row : rows) {
             row.refreshName();
         }
+        applyFilter(false); // the new name may (not) match the search text
     }
 
 
     @Override
     public void delete(Account account)
     {
+        if (!opened || lockPending) {
+            return; // chosen in a menu that was open when locking
+        }
         int answer = JOptionPane.showConfirmDialog(frame, msg.format("delete.confirm", displayName(account)),
                                                    msg.get("row.delete"), JOptionPane.OK_CANCEL_OPTION,
                                                    JOptionPane.WARNING_MESSAGE);
-        if (answer != JOptionPane.OK_OPTION) {
+        int index = accounts.indexOf(account);
+        if (answer != JOptionPane.OK_OPTION || !opened || index < 0) {
             return;
         }
-        int index = accounts.indexOf(account);
         accounts.remove(account);
         if (!persist()) {
             accounts.add(index, account);
@@ -1096,6 +1377,52 @@ public class GUI implements AccountRow.Actions
         }
         rebuildList();
         setStatus(msg.format("status.deleted", displayName(account)), false);
+    }
+
+
+    @Override
+    public boolean canMove(Account account, AccountRow.Move where)
+    {
+        // while filtered, the neighbors in the list are not the ones shown
+        if (!opened || lockPending || readOnlyReason != null
+            || (searchField != null && AccountList.filters(searchField.getText()))) {
+            return false;
+        }
+        int index = indexOf(account);
+        return where == AccountRow.Move.DOWN ? index >= 0 && index < accounts.size() - 1 : index > 0;
+    }
+
+
+    @Override
+    public void move(Account account, AccountRow.Move where)
+    {
+        if (!canMove(account, where)) {
+            return;
+        }
+        int from = indexOf(account);
+        int to = where == AccountRow.Move.UP ? from - 1 : where == AccountRow.Move.DOWN ? from + 1 : 0;
+        AccountList.move(accounts, from, to);
+        if (!persist()) {
+            AccountList.move(accounts, to, from);
+            return;
+        }
+        rebuildList();
+        selectedRow = to;
+        showSelection();
+        // keep the keyboard on the moved row, so it can be moved again
+        rows.get(to).editButton().requestFocusInWindow();
+    }
+
+
+    /** @return the index of this very account (two registrations of the same key are equal) */
+    private int indexOf(Account account)
+    {
+        for (int i = 0; i < accounts.size(); i++) {
+            if (accounts.get(i) == account) {
+                return i;
+            }
+        }
+        return -1;
     }
 
 
@@ -1335,6 +1662,10 @@ public class GUI implements AccountRow.Actions
 
     private void confirmAndAdd(Account account, String name)
     {
+        if (!opened) {
+            setStatus(msg.get("status.lockedNotAdded"), true); // a QR code read while the list was locked
+            return;
+        }
         JTextField nameField = new JTextField(name, 24);
         JPanel form = new JPanel(new BorderLayout(8, 0));
         form.add(new JLabel(msg.get("add.name")), BorderLayout.WEST);
@@ -1350,6 +1681,10 @@ public class GUI implements AccountRow.Actions
 
     private void add(Account account)
     {
+        if (!opened) {
+            setStatus(msg.get("status.lockedNotAdded"), true);
+            return;
+        }
         for (Account a : accounts) {
             if (a.secret().equals(account.secret())) {
                 int answer = JOptionPane.showConfirmDialog(frame, msg.format("add.duplicate", displayName(a)),
@@ -1366,6 +1701,7 @@ public class GUI implements AccountRow.Actions
             accounts.remove(account);
             return;
         }
+        searchField.setText(""); // the new service is shown even if the list was filtered
         rebuildList();
         setStatus(msg.format("status.added", displayName(account)), false);
     }
@@ -1461,6 +1797,183 @@ public class GUI implements AccountRow.Actions
     }
 
 
+    // --- locking (issue #22) ---
+
+    /** @return true if the list is open and protected by a password: only then a lock can be unlocked again */
+    private boolean canLock()
+    {
+        return opened && protection == AccountStore.Protection.PASSWORD;
+    }
+
+
+    private void updateLockItem()
+    {
+        if (lockItem != null) {
+            lockItem.setEnabled(canLock());
+        }
+    }
+
+
+    /**
+     * Locks now, or right after the open dialogs are closed: the code that opened them still runs and needs
+     * the list. The codes and the dialogs are hidden at once, and nothing is saved until unlocked again.
+     */
+    private void requestLock()
+    {
+        if (!canLock()) {
+            if (lockPending && opened) {
+                showCard(CARD_LIST); // no longer protected by a password
+            }
+            lockPending = false;
+            return;
+        }
+        // an open menu (the edit menu of a service) would still act on the list after the lock
+        MenuSelectionManager.defaultManager().clearSelectedPath();
+        if (modalDialogShown()) {
+            if (!lockPending) {
+                lockPending = true;
+                clipboard.clear();
+                showCard(CARD_UNLOCK);
+            }
+            // a dialog may show a key or a QR code: closed at once, as if cancelled (a change confirmed
+            // now is not saved anyway); the lock follows when the dialogs are gone, see tick()
+            hideModalDialogs();
+            return;
+        }
+        lock();
+    }
+
+
+    private static void hideModalDialogs()
+    {
+        for (Window w : Window.getWindows()) {
+            if (w instanceof Dialog && ((Dialog) w).isModal() && w.isShowing()) {
+                w.setVisible(false);
+            }
+        }
+    }
+
+
+    private static boolean modalDialogShown()
+    {
+        for (Window w : Window.getWindows()) {
+            if (w instanceof Dialog && ((Dialog) w).isModal() && w.isShowing()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    /** Removes the services, the derived key and the copied code; the password unlocks them again. */
+    private void lock()
+    {
+        lockPending = false;
+        locked = true;
+        clipboard.clear();
+        opened = false;
+        accounts.clear(); // the keys of the services are strings: dropped, but cannot be overwritten
+        if (key != null) {
+            key.destroy();
+            key = null;
+        }
+        fileContent = null;
+        selectedRow = -1;
+        if (searchField != null) {
+            searchField.setText("");
+        }
+        rebuildList();
+        updateLockItem();
+        showCard(CARD_UNLOCK);
+        setStatus(msg.get("status.locked"), false);
+    }
+
+
+    /** For tests: whether the services and the derived key were removed. */
+    boolean lockedForTest()
+    {
+        return !opened && key == null && accounts.isEmpty();
+    }
+
+
+    /** @return true if the configuration file is protected by a password (also in the format of et-otp 1.x) */
+    private boolean fileHasPassword()
+    {
+        try {
+            AccountStore.Kind kind = AccountStore.inspect(configFile);
+            return kind == AccountStore.Kind.PASSWORD || kind == AccountStore.Kind.LEGACY;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+
+    private JPanel buildLockTab()
+    {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = 0;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.anchor = GridBagConstraints.NORTHWEST;
+        c.insets = new Insets(2, 0, 2, 0);
+        boolean password = protection == AccountStore.Protection.PASSWORD
+                           || (protection == null && fileHasPassword()); // not unlocked yet
+
+        int minutes = uiSettings.lockIdleMinutes();
+        JCheckBox idle = new JCheckBox(msg.get("lock.idle"), minutes > 0);
+        JSpinner spinner = new JSpinner(new SpinnerNumberModel(minutes > 0 ? minutes : UiSettings.DEFAULT_LOCK_MINUTES,
+                                                               1, UiSettings.MAX_LOCK_MINUTES, 1));
+        JLabel unit = new JLabel(msg.get("lock.minutes"));
+        unit.setLabelFor(spinner);
+        spinner.getAccessibleContext().setAccessibleName(msg.get("lock.idle"));
+        JPanel idleRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        idleRow.add(idle);
+        idleRow.add(Box.createHorizontalStrut(6));
+        idleRow.add(spinner);
+        idleRow.add(Box.createHorizontalStrut(6));
+        idleRow.add(unit);
+        JCheckBox system = new JCheckBox(msg.get(Dpapi.isAvailable() ? "lock.system" : "lock.sleep"),
+                                         uiSettings.lockOnSystemLock());
+        JCheckBox minimize = new JCheckBox(msg.get("lock.minimize"), uiSettings.lockOnMinimize());
+        String shortcut = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx() == InputEvent.META_DOWN_MASK
+                          ? "\u2318L" : "Ctrl+L";
+
+        panel.add(SetupWizard.note(msg.get(password ? "lock.text" : "lock.noPassword")), c);
+        c.insets = new Insets(8, 0, 2, 0);
+        panel.add(idleRow, c);
+        c.insets = new Insets(2, 0, 2, 0);
+        panel.add(system, c);
+        panel.add(minimize, c);
+        c.insets = new Insets(8, 0, 2, 0);
+        panel.add(SetupWizard.note(msg.format("lock.manual", shortcut)), c);
+
+        Runnable save = () -> {
+            spinner.setEnabled(password && idle.isSelected());
+            uiSettings.setLockIdleMinutes(idle.isSelected() ? (Integer) spinner.getValue() : 0);
+            uiSettings.setLockOnSystemLock(system.isSelected());
+            uiSettings.setLockOnMinimize(minimize.isSelected());
+            try {
+                uiSettings.save();
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(settingsDialog, msg.format("error.uiSettings", ex.getMessage()),
+                                              settingsDialog.getTitle(), JOptionPane.WARNING_MESSAGE);
+            }
+        };
+        for (JCheckBox b : new JCheckBox[] { idle, system, minimize }) {
+            b.setEnabled(password);
+            b.addActionListener(e -> save.run());
+        }
+        spinner.setEnabled(password && idle.isSelected());
+        spinner.addChangeListener(e -> save.run());
+
+        c.weighty = 1;
+        panel.add(new JPanel(), c);
+        return panel;
+    }
+
+
     // --- settings dialog ---
 
     private void showSettings(int tab)
@@ -1484,6 +1997,7 @@ public class GUI implements AccountRow.Actions
         tabs.addTab(msg.get("settings.tab.protection"), protectionTab);
         tabs.setEnabledAt(0, opened);
         tabs.addTab(msg.get("settings.tab.general"), buildGeneralTab());
+        tabs.addTab(msg.get("settings.tab.lock"), buildLockTab());
         dia.getContentPane().add(tabs);
         packWrapped(dia);
         return dia;

@@ -27,6 +27,9 @@ final class UiSettings
     private static final String LANGUAGE = "language";
     private static final String WINDOW_X = "window.x";
     private static final String WINDOW_Y = "window.y";
+    private static final String LOCK_IDLE = "lock.idleMinutes";
+    private static final String LOCK_SYSTEM = "lock.onSystemLock";
+    private static final String LOCK_MINIMIZE = "lock.onMinimize";
 
     private final File file;
     private final Properties props;
@@ -113,6 +116,56 @@ final class UiSettings
     {
         props.setProperty(WINDOW_X, Integer.toString(p.x));
         props.setProperty(WINDOW_Y, Integer.toString(p.y));
+    }
+
+
+    // --- locking (issue #22); only used with password protection ---
+
+    static final int DEFAULT_LOCK_MINUTES = 5;
+    static final int MAX_LOCK_MINUTES = 240;
+
+
+    /** @return the minutes without input after which the services are locked, 0 for never */
+    int lockIdleMinutes()
+    {
+        try {
+            int m = Integer.parseInt(props.getProperty(LOCK_IDLE, Integer.toString(DEFAULT_LOCK_MINUTES)).trim());
+            return Math.max(0, Math.min(MAX_LOCK_MINUTES, m));
+        } catch (NumberFormatException e) {
+            return DEFAULT_LOCK_MINUTES;
+        }
+    }
+
+
+    void setLockIdleMinutes(int minutes)
+    {
+        props.setProperty(LOCK_IDLE, Integer.toString(Math.max(0, Math.min(MAX_LOCK_MINUTES, minutes))));
+    }
+
+
+    /** @return true to lock when the computer is locked or sleeps (default) */
+    boolean lockOnSystemLock()
+    {
+        return !"false".equalsIgnoreCase(props.getProperty(LOCK_SYSTEM, "true").trim());
+    }
+
+
+    void setLockOnSystemLock(boolean on)
+    {
+        props.setProperty(LOCK_SYSTEM, Boolean.toString(on));
+    }
+
+
+    /** @return true to lock when the window is minimized (default false) */
+    boolean lockOnMinimize()
+    {
+        return "true".equalsIgnoreCase(props.getProperty(LOCK_MINIMIZE, "false").trim());
+    }
+
+
+    void setLockOnMinimize(boolean on)
+    {
+        props.setProperty(LOCK_MINIMIZE, Boolean.toString(on));
     }
 
 

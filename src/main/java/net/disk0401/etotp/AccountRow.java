@@ -22,6 +22,8 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JComponent;
 import javax.swing.UIManager;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 
 
 /**
@@ -39,6 +41,17 @@ final class AccountRow extends JPanel
         void rename(Account account);
 
         void delete(Account account);
+
+        /** @return false if the account cannot be moved there now (at the end of the list, or filtered) */
+        boolean canMove(Account account, Move where);
+
+        void move(Account account, Move where);
+    }
+
+    /** Where the edit menu moves a service. */
+    enum Move
+    {
+        UP, DOWN, TOP
     }
 
     private final Account account;
@@ -49,6 +62,7 @@ final class AccountRow extends JPanel
     private final TimeBar timeBar;
     private long shownCounter = Long.MIN_VALUE;
     private String code = "";
+    private final JButton editButton;
 
 
     AccountRow(Account account, Messages msg, Actions actions)
@@ -72,6 +86,10 @@ final class AccountRow extends JPanel
             @Override
             public void mouseClicked(MouseEvent e)
             {
+                // a right click opens the menu of the row, and must not replace the clipboard
+                if (!javax.swing.SwingUtilities.isLeftMouseButton(e) || e.isPopupTrigger()) {
+                    return;
+                }
                 actions.copy(account, code);
             }
         });
@@ -88,7 +106,33 @@ final class AccountRow extends JPanel
         delete.addActionListener(e -> actions.delete(account));
         menu.add(rename);
         menu.add(delete);
+        menu.addSeparator();
+        JMenuItem[] moves = new JMenuItem[Move.values().length];
+        for (Move where : Move.values()) {
+            JMenuItem item = new JMenuItem(msg.get("row.move." + where.name().toLowerCase(java.util.Locale.ROOT)));
+            item.addActionListener(e -> actions.move(account, where));
+            moves[where.ordinal()] = item;
+            menu.add(item);
+        }
+        menu.addPopupMenuListener(new PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(PopupMenuEvent e)
+            {
+                for (Move where : Move.values()) {
+                    moves[where.ordinal()].setEnabled(actions.canMove(account, where));
+                }
+            }
+
+            @Override
+            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) { }
+
+            @Override
+            public void popupMenuCanceled(PopupMenuEvent e) { }
+        });
         edit.addActionListener(e -> menu.show(edit, 0, edit.getHeight()));
+        editButton = edit;
+        // the same menu with a right click anywhere on the row
+        setComponentPopupMenu(menu);
 
         GridBagConstraints c = new GridBagConstraints();
         c.gridx = 0;
@@ -129,6 +173,11 @@ final class AccountRow extends JPanel
         c.insets = new Insets(6, 0, 0, 0);
         add(timeBar, c);
 
+        for (java.awt.Component child : getComponents()) {
+            if (child instanceof JComponent) {
+                ((JComponent) child).setInheritsPopupMenu(true);
+            }
+        }
         refreshName();
         update(System.currentTimeMillis() / 1000);
     }
@@ -140,9 +189,50 @@ final class AccountRow extends JPanel
     }
 
 
+    /** @return the code shown now */
+    String code()
+    {
+        return code;
+    }
+
+
+    /** @return the name as shown, also for a service without a name */
+    String shownName()
+    {
+        return account.name().isEmpty() ? msg.get("row.unnamed") : account.name();
+    }
+
+
+    /** Marks the row chosen with the arrow keys in the search field. */
+    void setSelected(boolean selected, Color normalBackground)
+    {
+        setBackground(selected ? mix(normalBackground, UIManager.getColor("List.selectionBackground")) : normalBackground);
+    }
+
+
+    /** @return a light tint of the selection color: the texts keep their colors, so they must stay readable */
+    private static Color mix(Color base, Color tint)
+    {
+        if (base == null || tint == null) {
+            return base != null ? base : Color.LIGHT_GRAY;
+        }
+        float t = 0.25f;
+        return new Color(Math.round(base.getRed() * (1 - t) + tint.getRed() * t),
+                         Math.round(base.getGreen() * (1 - t) + tint.getGreen() * t),
+                         Math.round(base.getBlue() * (1 - t) + tint.getBlue() * t));
+    }
+
+
+    /** The button that opens the edit menu, to keep the keyboard focus on the row after a move. */
+    JButton editButton()
+    {
+        return editButton;
+    }
+
+
     void refreshName()
     {
-        nameLabel.setText(account.name().isEmpty() ? msg.get("row.unnamed") : account.name());
+        nameLabel.setText(shownName());
     }
 
 

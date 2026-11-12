@@ -1,0 +1,49 @@
+name: Issue status
+
+# develop is the default branch, so "Fixes #1" would close an issue as soon as the fix reaches develop.
+# This marks the referenced issues with "fixed in develop" instead (and reopens them if a closing keyword
+# closed them); "Close released issues" closes them when the release is published. See RELEASING.md.
+#
+# Only push events: a merged pull request is a push to develop as well, and its title and body are read
+# from the API. So there is one run per change, and no run can replace another.
+on:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  mark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Mark the referenced issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        run: |
+          if git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            commits="$(git rev-list "$BEFORE..$AFTER")" # all of them: a reference missed here is never seen again
+          else
+            commits="$(git rev-list --max-count=20 "$AFTER")"
+          fi
+          text="$(mktemp)"
+          by=""
+          for c in $commits; do
+            git log -1 --format=%B "$c" >> "$text"
+            # the merged pull requests of the commit (a merge, squash or rebase into develop)
+            pulls="$(gh api "repos/$GITHUB_REPOSITORY/commits/$c/pulls" \
+              --jq '[.[] | select(.merged_at != null and .base.ref == "develop")]')"
+            jq -r '.[] | .title, (.body // "")' <<< "$pulls" >> "$text"
+            for n in $(jq -r '.[].number' <<< "$pulls"); do
+              case " $by " in *" #$n "*) ;; *) by="$by #$n" ;; esac
+            done
+          done
+          by="${by# }"
+          bash .github/scripts/issue-status.sh mark "$AFTER" "${by:-commit ${AFTER:0:7}}" < "$text"

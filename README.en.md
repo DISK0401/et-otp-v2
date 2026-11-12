@@ -4,7 +4,7 @@
 [![License: GPL-2.0-only](https://img.shields.io/github/license/DISK0401/et-otp-v2)](LICENSE)
 [![Java 25+](https://img.shields.io/badge/Java-25%2B-blue)](https://adoptium.net/)
 [![Website](https://img.shields.io/badge/website-disk0401.github.io-informational)](https://disk0401.github.io/et-otp-v2/)
-[![Last commit](https://img.shields.io/github/last-commit/DISK0401/et-otp-v2)](https://github.com/DISK0401/et-otp-v2/commits/main)
+[![Last commit](https://img.shields.io/github/last-commit/DISK0401/et-otp-v2)](https://github.com/DISK0401/et-otp-v2/commits/develop)
 
 English | [日本語](README.md)
 
@@ -23,6 +23,8 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 - The user interface is in English and Japanese. It is shown in Japanese if the language of the OS is Japanese, else in English, and can be switched on the General tab of the settings.
 - When started without a configuration file, a setup wizard opens. It asks for the protection and the location of the configuration file and, on Windows, can create a desktop shortcut. You can also choose an existing configuration file and keep using it.
 - The window opens where it was when the program was last closed.
+- With password protection, the services are locked again after a time without use, and when the computer is locked or sleeps. et-OTP-v2 > Lock (Ctrl+L) locks at once.
+- Type part of a name into the search field to show only those services; choose one with the up and down keys and press Enter to copy its code. The edit menu changes the order of the services.
 - Started with `--code <name>`, it writes the code without opening the window, for batch files and scripts.
 
 ## Requirements
@@ -63,11 +65,28 @@ if not defined MFA_CODE exit /b 1
 ```
 
 - The name is the name shown in et-otp-v2. If no service has exactly this name, the case is ignored. `--list` writes the names of the registered services.
-- If the services are protected with a password, you are asked for it; the password is not shown while you type. With protection for your Windows user, the code is written without a question.
+- If the services are protected with a password, you are asked for it (not with `--password-stdin`); the password is not shown while you type. With protection for your Windows user, the code is written without a question.
 - If the code changes within 3 seconds, the next code is waited for and written.
-- Only the code goes to the standard output; the password prompt and errors go to the standard error output. The exit code is 0 when done, 1 when failed and 2 for wrong options.
+- Only the code (with `--json` the JSON) goes to the standard output; the password prompt and errors go to the standard error output. The exit code is 0 when done, 1 when failed and 2 for wrong options.
 - The configuration file is only read, so this also works while the window is open. Files in the format of et-otp 1.x and et-otp-v2 2.0 cannot be read: open them once in the window to convert them first.
 - With the portable edition for macOS run `sh et-otp-v2.command --code AWS`, for Linux `sh et-otp-v2.sh --code AWS`, with the plain JAR `java -jar et-otp-v2-<version>.jar --code AWS`.
+
+More options; `--help` lists them:
+
+- `--copy`: copies the code to the clipboard instead of writing it. The copied code is not removed later. On Linux without an app that keeps the clipboard, the copied code is gone when et-otp-v2 ends.
+- `--next`: writes the code of the next period, without waiting for the code to change.
+- `--json`: writes the result as JSON. For `--code`: the name (`name`), the code (`code`), the seconds left (`secondsLeft`), the period (`period`) and the next code (`next`). Characters outside ASCII are written as `\uXXXX`, so the encoding of the console does not matter.
+- `--password-stdin`: reads the password from the first line of the standard input. This works without a console, for example in the Task Scheduler or when called from another program. A wrong password fails without asking again.
+- `--config <file>`: uses this configuration file.
+- `--version`: writes the version.
+
+For `--password-stdin`, give the password for example from a file that other users cannot read:
+
+```bat
+"C:\tools\et-otp-v2\et-otp-v2.bat" --code AWS --password-stdin < "%USERPROFILE%\secret\et-otp-password.txt"
+```
+
+There is no way to give the password in an environment variable or as an argument: arguments can be seen by other programs, and environment variables can be read by other programs of the same user and are passed on to the programs started. `echo password | ...` works as well, but cmd starts the left side of the pipe as another cmd, whose command line, with the password, can be seen by other programs; the password also stays in the batch file or the command history. In cmd, `echo password | ...` also passes the space before the "|": write `echo password| ...` without the space.
 
 ## Upgrading from et-otp 1.x and et-otp-v2 2.0
 
