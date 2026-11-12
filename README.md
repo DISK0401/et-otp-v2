@@ -4,7 +4,7 @@
 [![License: GPL-2.0-only](https://img.shields.io/github/license/DISK0401/et-otp-v2)](LICENSE)
 [![Java 25+](https://img.shields.io/badge/Java-25%2B-blue)](https://adoptium.net/)
 [![Website](https://img.shields.io/badge/website-disk0401.github.io-informational)](https://disk0401.github.io/et-otp-v2/ja/)
-[![Last commit](https://img.shields.io/github/last-commit/DISK0401/et-otp-v2)](https://github.com/DISK0401/et-otp-v2/commits/main)
+[![Last commit](https://img.shields.io/github/last-commit/DISK0401/et-otp-v2)](https://github.com/DISK0401/et-otp-v2/commits/develop)
 
 [English](README.en.md) | 日本語
 
