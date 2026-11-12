@@ -12,6 +12,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Desktop;
+import java.awt.Dialog;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -26,6 +27,7 @@ import java.awt.Window;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.AWTEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
@@ -72,6 +74,9 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JRadioButton;
+import javax.swing.JCheckBox;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
@@ -166,6 +171,14 @@ public class GUI implements AccountRow.Actions
     private boolean typingStartsSearch;
     private JTextArea statusLabel;
     private Timer timer;
+    /** locking after idle time and sleep (issue #22). */
+    private final AutoLock autoLock = new AutoLock(System.currentTimeMillis());
+    private final ClipboardGuard clipboard = new ClipboardGuard(Toolkit.getDefaultToolkit().getSystemClipboard());
+    /** a lock waits for the open dialogs to close, so their changes are saved first. */
+    private boolean lockPending;
+    /** true from a lock until the list is opened again. */
+    private boolean locked;
+    private JMenuItem lockItem;
 
     private JDialog settingsDialog;
     private JDialog aboutDialog;
@@ -197,7 +210,8 @@ public class GUI implements AccountRow.Actions
     }
 
 
-    private static void start()
+    /** @return the started window, or null if another instance runs (package-private for tests) */
+    static GUI start()
     {
         useSystemLookAndFeel();
         File config = ConfigLocation.resolve();
@@ -210,14 +224,24 @@ public class GUI implements AccountRow.Actions
             JOptionPane.showMessageDialog(null, gui.msg.format("error.running", config.getAbsolutePath()),
                                           PROGNAME, JOptionPane.INFORMATION_MESSAGE);
             System.exit(0);
-            return;
+            return null;
         }
         gui.buildMainFrame();
         gui.placeWindow(gui.uiSettings.windowLocation());
         gui.frame.setVisible(true);
         gui.timer = new Timer(1000, e -> gui.tick());
         gui.timer.start();
+        // every key and mouse input in a window of the program counts as use
+        Toolkit.getDefaultToolkit().addAWTEventListener(e -> gui.autoLock.input(System.currentTimeMillis()),
+            AWTEvent.KEY_EVENT_MASK | AWTEvent.MOUSE_EVENT_MASK | AWTEvent.MOUSE_MOTION_EVENT_MASK
+            | AWTEvent.MOUSE_WHEEL_EVENT_MASK);
+        SessionWatcher.start(() -> SwingUtilities.invokeLater(() -> {
+            if (gui.uiSettings.lockOnSystemLock()) {
+                gui.requestLock();
+            }
+        }));
         gui.open();
+        return gui;
     }
 
 
@@ -370,6 +394,10 @@ public class GUI implements AccountRow.Actions
         fileContent = o.source;
         readOnlyReason = o.readOnlyReason != null ? o.readOnlyReason : lockProblem;
         opened = true;
+        lockPending = false;
+        locked = false;
+        autoLock.reset(System.currentTimeMillis());
+        updateLockItem();
         rebuildList();
         showCard(CARD_LIST);
         setBusy(false);
@@ -425,6 +453,12 @@ public class GUI implements AccountRow.Actions
     /** Saves the account list. @return false if it failed (an error dialog was shown) */
     private boolean persist()
     {
+        if (locked || lockPending) {
+            // a change confirmed after the lock was requested may not come from the user: not saved,
+            // the caller restores the previous state
+            setStatus(msg.get("status.lockedNotSaved"), true);
+            return false;
+        }
         if (readOnlyReason != null) {
             JOptionPane.showMessageDialog(frame, msg.format("status.readOnly", readOnlyReason),
                                           msg.get("error.save.title"), JOptionPane.ERROR_MESSAGE);
@@ -666,10 +700,14 @@ public class GUI implements AccountRow.Actions
     /** Lets the user choose a new location and moves the opened configuration file there. */
     private void moveConfig()
     {
-        if (!opened || readOnlyReason != null) {
+        if (!opened || readOnlyReason != null || lockPending) {
             return;
         }
         File chosen = chooseLocation(settingsDialog, msg, configFile);
+        if (lockPending || locked) {
+            setStatus(msg.get("status.lockedNotSaved"), true); // chosen after the lock was requested
+            return;
+        }
         if (chosen == null || sameFile(chosen, configFile)) {
             return;
         }
@@ -804,6 +842,11 @@ public class GUI implements AccountRow.Actions
         JMenu m = new JMenu(PROGNAME);
         m.setMnemonic(KeyEvent.VK_E);
         m.add(menuItem("menu.settings", e -> showSettings(opened ? 0 : 1)));
+        lockItem = menuItem("menu.lock", e -> requestLock());
+        lockItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_L,
+                                                       Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        lockItem.setEnabled(canLock());
+        m.add(lockItem);
         if (DesktopShortcut.isSupported()) {
             m.add(menuItem("menu.shortcut", e -> createShortcut()));
         }
@@ -855,6 +898,14 @@ public class GUI implements AccountRow.Actions
             {
                 saveWindowLocation();
                 finishShortcuts();
+            }
+
+            @Override
+            public void windowIconified(WindowEvent e)
+            {
+                if (uiSettings.lockOnMinimize()) {
+                    requestLock();
+                }
             }
         });
 
@@ -1205,7 +1256,13 @@ public class GUI implements AccountRow.Actions
 
     private void tick()
     {
-        long now = System.currentTimeMillis() / 1000;
+        long millis = System.currentTimeMillis();
+        AutoLock.Reason reason = autoLock.tick(millis, uiSettings.lockIdleMinutes(), uiSettings.lockOnSystemLock());
+        if (reason != null || lockPending) {
+            requestLock();
+        }
+        updateLockItem(); // the protection may have changed in the settings
+        long now = millis / 1000;
         for (AccountRow row : rows) {
             row.update(now);
         }
@@ -1272,7 +1329,7 @@ public class GUI implements AccountRow.Actions
     @Override
     public void copy(Account account, String code)
     {
-        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(code), null);
+        clipboard.copy(code);
         setStatus(msg.format("status.copied", displayName(account)), false);
     }
 
@@ -1598,6 +1655,10 @@ public class GUI implements AccountRow.Actions
 
     private void confirmAndAdd(Account account, String name)
     {
+        if (!opened) {
+            setStatus(msg.get("status.lockedNotAdded"), true); // a QR code read while the list was locked
+            return;
+        }
         JTextField nameField = new JTextField(name, 24);
         JPanel form = new JPanel(new BorderLayout(8, 0));
         form.add(new JLabel(msg.get("add.name")), BorderLayout.WEST);
@@ -1613,6 +1674,10 @@ public class GUI implements AccountRow.Actions
 
     private void add(Account account)
     {
+        if (!opened) {
+            setStatus(msg.get("status.lockedNotAdded"), true);
+            return;
+        }
         for (Account a : accounts) {
             if (a.secret().equals(account.secret())) {
                 int answer = JOptionPane.showConfirmDialog(frame, msg.format("add.duplicate", displayName(a)),
@@ -1725,6 +1790,168 @@ public class GUI implements AccountRow.Actions
     }
 
 
+    // --- locking (issue #22) ---
+
+    /** @return true if the list is open and protected by a password: only then a lock can be unlocked again */
+    private boolean canLock()
+    {
+        return opened && protection == AccountStore.Protection.PASSWORD;
+    }
+
+
+    private void updateLockItem()
+    {
+        if (lockItem != null) {
+            lockItem.setEnabled(canLock());
+        }
+    }
+
+
+    /**
+     * Locks now, or right after the open dialogs are closed: the code that opened them still runs and needs
+     * the list. The codes and the dialogs are hidden at once, and nothing is saved until unlocked again.
+     */
+    private void requestLock()
+    {
+        if (!canLock()) {
+            if (lockPending && opened) {
+                showCard(CARD_LIST); // no longer protected by a password
+            }
+            lockPending = false;
+            return;
+        }
+        if (modalDialogShown()) {
+            if (!lockPending) {
+                lockPending = true;
+                clipboard.clear();
+                showCard(CARD_UNLOCK);
+            }
+            // a dialog may show a key or a QR code: closed at once, as if cancelled (a change confirmed
+            // now is not saved anyway); the lock follows when the dialogs are gone, see tick()
+            hideModalDialogs();
+            return;
+        }
+        lock();
+    }
+
+
+    private static void hideModalDialogs()
+    {
+        for (Window w : Window.getWindows()) {
+            if (w instanceof Dialog && ((Dialog) w).isModal() && w.isShowing()) {
+                w.setVisible(false);
+            }
+        }
+    }
+
+
+    private static boolean modalDialogShown()
+    {
+        for (Window w : Window.getWindows()) {
+            if (w instanceof Dialog && ((Dialog) w).isModal() && w.isShowing()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    /** Removes the services, the derived key and the copied code; the password unlocks them again. */
+    private void lock()
+    {
+        lockPending = false;
+        locked = true;
+        clipboard.clear();
+        opened = false;
+        accounts.clear(); // the keys of the services are strings: dropped, but cannot be overwritten
+        if (key != null) {
+            key.destroy();
+            key = null;
+        }
+        fileContent = null;
+        selectedRow = -1;
+        if (searchField != null) {
+            searchField.setText("");
+        }
+        rebuildList();
+        updateLockItem();
+        showCard(CARD_UNLOCK);
+        setStatus(msg.get("status.locked"), false);
+    }
+
+
+    /** For tests: whether the services and the derived key were removed. */
+    boolean lockedForTest()
+    {
+        return !opened && key == null && accounts.isEmpty();
+    }
+
+
+    private JPanel buildLockTab()
+    {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = 0;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.anchor = GridBagConstraints.NORTHWEST;
+        c.insets = new Insets(2, 0, 2, 0);
+        boolean password = protection == AccountStore.Protection.PASSWORD;
+
+        int minutes = uiSettings.lockIdleMinutes();
+        JCheckBox idle = new JCheckBox(msg.get("lock.idle"), minutes > 0);
+        JSpinner spinner = new JSpinner(new SpinnerNumberModel(minutes > 0 ? minutes : UiSettings.DEFAULT_LOCK_MINUTES,
+                                                               1, UiSettings.MAX_LOCK_MINUTES, 1));
+        JLabel unit = new JLabel(msg.get("lock.minutes"));
+        unit.setLabelFor(spinner);
+        spinner.getAccessibleContext().setAccessibleName(msg.get("lock.idle"));
+        JPanel idleRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        idleRow.add(idle);
+        idleRow.add(Box.createHorizontalStrut(6));
+        idleRow.add(spinner);
+        idleRow.add(Box.createHorizontalStrut(6));
+        idleRow.add(unit);
+        JCheckBox system = new JCheckBox(msg.get(Dpapi.isAvailable() ? "lock.system" : "lock.sleep"),
+                                         uiSettings.lockOnSystemLock());
+        JCheckBox minimize = new JCheckBox(msg.get("lock.minimize"), uiSettings.lockOnMinimize());
+        String shortcut = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx() == InputEvent.META_DOWN_MASK
+                          ? "\u2318L" : "Ctrl+L";
+
+        panel.add(SetupWizard.note(msg.get(password ? "lock.text" : "lock.noPassword")), c);
+        c.insets = new Insets(8, 0, 2, 0);
+        panel.add(idleRow, c);
+        c.insets = new Insets(2, 0, 2, 0);
+        panel.add(system, c);
+        panel.add(minimize, c);
+        c.insets = new Insets(8, 0, 2, 0);
+        panel.add(SetupWizard.note(msg.format("lock.manual", shortcut)), c);
+
+        Runnable save = () -> {
+            spinner.setEnabled(password && idle.isSelected());
+            uiSettings.setLockIdleMinutes(idle.isSelected() ? (Integer) spinner.getValue() : 0);
+            uiSettings.setLockOnSystemLock(system.isSelected());
+            uiSettings.setLockOnMinimize(minimize.isSelected());
+            try {
+                uiSettings.save();
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(settingsDialog, msg.format("error.uiSettings", ex.getMessage()),
+                                              settingsDialog.getTitle(), JOptionPane.WARNING_MESSAGE);
+            }
+        };
+        for (JCheckBox b : new JCheckBox[] { idle, system, minimize }) {
+            b.setEnabled(password);
+            b.addActionListener(e -> save.run());
+        }
+        spinner.setEnabled(password && idle.isSelected());
+        spinner.addChangeListener(e -> save.run());
+
+        c.weighty = 1;
+        panel.add(new JPanel(), c);
+        return panel;
+    }
+
+
     // --- settings dialog ---
 
     private void showSettings(int tab)
@@ -1748,6 +1975,7 @@ public class GUI implements AccountRow.Actions
         tabs.addTab(msg.get("settings.tab.protection"), protectionTab);
         tabs.setEnabledAt(0, opened);
         tabs.addTab(msg.get("settings.tab.general"), buildGeneralTab());
+        tabs.addTab(msg.get("settings.tab.lock"), buildLockTab());
         dia.getContentPane().add(tabs);
         packWrapped(dia);
         return dia;
