@@ -1,142 +1,117 @@
 /*
- * Base32.java - et-otp: GPL Java TOTP soft token by Bernd Eckenfels.
- * Modified 2026 by DISK0401 for et-otp-v2 (package renamed to net.disk0401.etotp).
+ * Base32.java - et-otp-v2: GPL Java TOTP soft token.
+ * Copyright (C) 2026 DISK0401.
+ * Licensed under the GNU General Public License v2.0 only.
  */
 package net.disk0401.etotp;
 
-import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 
 /**
- * Encodes arbitrary byte arrays as case-insensitive BASE32 strings.
- * <P>
- * This is based on the Google code from Steve Weis and Neal Gafter
- * http://code.google.com/p/google-authenticator/source/browse/mobile/android/src/com/google/android/apps/authenticator/Base32String.java
+ * Base32 of RFC 4648 (letters A to Z, digits 2 to 7), as used by the keys of 2-step verification.
+ * Written for et-otp-v2; it keeps the behavior of the class of the same name in et-otp:
+ * <ul>
+ * <li>{@link #encode} writes upper case letters without padding ({@code =}).</li>
+ * <li>{@link #decode} ignores case and the separators {@code -}, space and {@code .}, reads {@code 8} as
+ * {@code B} and {@code 1} as {@code I}, and ignores the bits after the last whole byte. Padding is not
+ * accepted.</li>
+ * </ul>
  */
-public class Base32
+final class Base32
 {
-    private static final Base32 INSTANCE = new Base32();
+    private static final String ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+    private static final int BITS = 5;
 
-    private final char[] DIGITS;
-    private final int MASK;
-    private final int SHIFT;
-    private final Map<Character, Integer> CHAR_MAP;
 
-    protected Base32()
+    private Base32() { }
+
+
+    /** @return the bytes of the text; empty for an empty text (or one with separators only) */
+    static byte[] decode(String text) throws DecodingException
     {
-        DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".toCharArray(); // RFC 4668/3548
-        MASK = DIGITS.length - 1;
-        SHIFT = Integer.numberOfTrailingZeros(DIGITS.length);
-        CHAR_MAP = new HashMap<>(DIGITS.length);
-        for (int i = 0; i < DIGITS.length; i++)
-        {
-            CHAR_MAP.put(Character.valueOf(DIGITS[i]), Integer.valueOf(i));
+        StringBuilder kept = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c != '-' && c != ' ' && c != '.') {
+                kept.append(c);
+            }
         }
-    }
-
-    public static Base32 getInstance()
-    {
-        return INSTANCE;
-    }
-
-    public static byte[] decode(String encoded)
-        throws DecodingException
-    {
-        return getInstance().decodeInternal(encoded);
-    }
-
-    protected byte[] decodeInternal(String encodedArg)
-        throws DecodingException
-    {
-        // Remove all '-', ' ', '.' (seperators, trimming). Might throw NPE if encodedArg is null
-        String encoded = encodedArg.replaceAll("-? ?\\.?", "");
-        // Canonicalize to all upper case
-        encoded = encoded.toUpperCase(Locale.ENGLISH);
-        encoded = encoded.replaceAll("8", "B").replaceAll("1", "I");
-
-        if (encoded.length() == 0) {
-            return new byte[0];
-        }
-
-        int encodedLength = encoded.length();
-        int outLength = encodedLength * SHIFT / 8;
-        byte[] result = new byte[outLength];
-        int buffer = 0;
-        int next = 0;
-        int bitsLeft = 0;
-        for (char c : encoded.toCharArray())
-        {
-            Integer i = CHAR_MAP.get(Character.valueOf(c));
-            if (i==null) {
+        // as in et-otp: also other letters whose upper case is A to Z
+        String upper = kept.toString().toUpperCase(Locale.ENGLISH);
+        int[] values = new int[upper.length()];
+        int count = 0;
+        for (int i = 0; i < upper.length(); i++) {
+            char c = upper.charAt(i);
+            int v = value(c);
+            if (v < 0) {
                 throw new DecodingException("Illegal character: " + c);
             }
-            buffer <<= SHIFT;
-            buffer |= i.intValue() & MASK;
-            bitsLeft += SHIFT;
-            if (bitsLeft >= 8) {
-                result[next++] = (byte) (buffer >> (bitsLeft - 8));
-                bitsLeft -= 8;
+            values[count++] = v;
+        }
+        byte[] out = new byte[count * BITS / 8];
+        int bits = 0;
+        int pending = 0;
+        int n = 0;
+        for (int i = 0; i < count; i++) {
+            pending = (pending << BITS | values[i]) & 0xFFF; // at most 12 bits are kept
+            bits += BITS;
+            if (bits >= 8) {
+                bits -= 8;
+                out[n++] = (byte) (pending >> bits);
             }
         }
-        // We'll ignore leftover bits for now.
-        // if (next != outLength || bitsLeft >= SHIFT) {
-        //  throw new DecodingException("Bits left: " + bitsLeft);}
-        return result;
+        return out;
     }
 
-    public static String encode(byte[] data)
+
+    /** @return the value 0 to 31 of the character, or -1 */
+    private static int value(char c)
     {
-        return getInstance().encodeInternal(data);
+        if (c >= 'A' && c <= 'Z') {
+            return c - 'A';
+        }
+        if (c >= '2' && c <= '7') {
+            return 26 + c - '2';
+        }
+        if (c == '8') {
+            return 'B' - 'A';
+        }
+        if (c == '1') {
+            return 'I' - 'A';
+        }
+        return -1;
     }
 
-    protected String encodeInternal(byte[] data)
+
+    /** @return the text of the bytes, without padding */
+    static String encode(byte[] data)
     {
-        if (data.length == 0) {
-            return "";
-        }
-
-        // SHIFT is the number of bits per output character, so the length of the
-        // output is the length of the input multiplied by 8/SHIFT, rounded up.
-        if (data.length >= (1 << 28)) {
-            // The computation below will fail, so don't do it.
-            throw new IllegalArgumentException();
-        }
-
-        int outputLength = (data.length * 8 + SHIFT - 1) / SHIFT;
-        StringBuilder result = new StringBuilder(outputLength);
-
-        int buffer = data[0];
-        int next = 1;
-        int bitsLeft = 8;
-        while (bitsLeft > 0 || next < data.length) {
-            if (bitsLeft < SHIFT) {
-                if (next < data.length) {
-                    buffer <<= 8;
-                    buffer |= (data[next++] & 0xff);
-                    bitsLeft += 8;
-                } else {
-                    int pad = SHIFT - bitsLeft;
-                    buffer <<= pad;
-                    bitsLeft += pad;
-                }
+        StringBuilder out = new StringBuilder((data.length * 8 + BITS - 1) / BITS);
+        int bits = 0;
+        int pending = 0;
+        for (byte b : data) {
+            pending = (pending << 8 | (b & 0xFF)) & 0xFFF;
+            bits += 8;
+            while (bits >= BITS) {
+                bits -= BITS;
+                out.append(ALPHABET.charAt((pending >> bits) & 0x1F));
             }
-            int index = MASK & (buffer >> (bitsLeft - SHIFT));
-            bitsLeft -= SHIFT;
-            result.append(DIGITS[index]);
         }
-        return result.toString();
+        if (bits > 0) {
+            out.append(ALPHABET.charAt((pending << (BITS - bits)) & 0x1F)); // filled with zero bits
+        }
+        return out.toString();
     }
 
-    static class DecodingException extends Exception
-    {
-        /** field <code>serialVersionUID</code> */
-        private static final long serialVersionUID = 20111119L;
 
-        public DecodingException(String message)
+    static final class DecodingException extends Exception
+    {
+        private static final long serialVersionUID = 1L;
+
+
+        DecodingException(String message)
         {
             super(message);
         }
     }
 }
-
