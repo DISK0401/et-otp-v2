@@ -6,11 +6,18 @@ package net.disk0401.etotp;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.awt.HeadlessException;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.DataFlavor;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.PrintStream;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayDeque;
@@ -42,6 +49,9 @@ class CodeCommandTest
     private final List<Long> sleeps = new ArrayList<>();
     private long now = NOW;
     private Account github;
+    private byte[] stdin = new byte[0];
+    private Charset stdinCharset = StandardCharsets.UTF_8;
+    private Clipboard clipboard = new Clipboard("test");
 
     @BeforeEach
     void createConfig() throws Exception
@@ -79,7 +89,14 @@ class CodeCommandTest
             String p = passwords.poll();
             return p == null ? null : p.toCharArray();
         };
-        return new CodeCommand(config, new Messages(Locale.ENGLISH), print(out), print(err), source, clock).run(args);
+        Clipboard clip = clipboard;
+        return new CodeCommand(config, new Messages(Locale.ENGLISH), print(out), print(err), source, clock,
+                               new ByteArrayInputStream(stdin), stdinCharset, () -> {
+                                   if (clip == null) {
+                                       throw new HeadlessException();
+                                   }
+                                   return clip;
+                               }).run(args);
     }
 
     private static PrintStream print(ByteArrayOutputStream bytes)
@@ -221,6 +238,17 @@ class CodeCommandTest
         assertEquals(CodeCommand.USAGE, run("--code"));
         assertEquals(CodeCommand.USAGE, run("--codes", "x"));
         assertEquals(CodeCommand.USAGE, run("--list", "x"));
+        assertEquals(CodeCommand.USAGE, run("--list", "--code", "x"));
+        assertEquals(CodeCommand.USAGE, run("--code", "x", "--code", "y"));
+        assertEquals(CodeCommand.USAGE, run("--code", "x", "--json", "--json"));
+        assertEquals(CodeCommand.USAGE, run("--code", "x", "--json", "--copy"));
+        assertEquals(CodeCommand.USAGE, run("--code", "x", "--json", "--next"));
+        assertEquals(CodeCommand.USAGE, run("--list", "--copy"));
+        assertEquals(CodeCommand.USAGE, run("--list", "--next"));
+        assertEquals(CodeCommand.USAGE, run("--version", "--json"));
+        assertEquals(CodeCommand.USAGE, run("--json"));
+        assertEquals(CodeCommand.USAGE, run("--config"));
+        assertEquals(CodeCommand.USAGE, run("--list", "--config", " "));
         assertTrue(err().startsWith("Usage:"), err());
         assertTrue(prompts.isEmpty());
 
@@ -234,5 +262,198 @@ class CodeCommandTest
         assertTrue(CodeCommand.handles(new String[] { "--code", "x" }));
         assertTrue(!CodeCommand.handles(new String[0]));
         assertTrue(!CodeCommand.handles(new String[] { "file.properties" }));
+    }
+
+    // --- issue #25 ---
+
+    @Test
+    void optionsMayComeInAnyOrder()
+    {
+        stdin = "pw\n".getBytes(StandardCharsets.UTF_8);
+
+        assertEquals(CodeCommand.OK, run("--password-stdin", "--next", "--code", "GitHub (me)"));
+        assertEquals(github.code(NOW / 1000 + 30) + System.lineSeparator(), out());
+    }
+
+    @Test
+    void readsThePasswordFromTheStandardInput()
+    {
+        stdin = "pw\r\nignored\n".getBytes(StandardCharsets.UTF_8);
+
+        assertEquals(CodeCommand.OK, run("--code", "GitHub (me)", "--password-stdin"));
+        assertEquals(github.code(NOW / 1000) + System.lineSeparator(), out());
+        assertTrue(prompts.isEmpty(), "the console is not asked");
+        assertEquals("", err());
+    }
+
+    @Test
+    void aPasswordWithoutLineEndAndInTheEncodingOfTheInput() throws Exception
+    {
+        SecretStore.PasswordKey key = SecretStore.PasswordKey.create("パス".toCharArray(), TEST_ITERATIONS);
+        Files.delete(config.toPath()); // a new file
+        AccountStore.save(config, List.of(github), AccountStore.Protection.PASSWORD, key, null);
+        key.destroy();
+        stdinCharset = Charset.forName("MS932");
+        stdin = "パス".getBytes(stdinCharset);
+
+        assertEquals(CodeCommand.OK, run("--code", "GitHub (me)", "--password-stdin"));
+    }
+
+    @Test
+    void aWrongPasswordFromTheStandardInputIsNotAskedAgain()
+    {
+        stdin = "pw \n".getBytes(StandardCharsets.UTF_8);
+        passwords.add("pw");
+
+        assertEquals(CodeCommand.FAILED, run("--code", "GitHub (me)", "--password-stdin"));
+        assertTrue(prompts.isEmpty());
+        assertTrue(err().contains("Bad password."), err());
+        assertTrue(err().contains("ends with a space"), err());
+        assertEquals("", out());
+    }
+
+    @Test
+    void anEmptyStandardInputFails()
+    {
+        assertEquals(CodeCommand.FAILED, run("--code", "GitHub (me)", "--password-stdin"));
+        assertTrue(err().contains("No password was given on the standard input"), err());
+
+        stdin = "\n".getBytes(StandardCharsets.UTF_8);
+        assertEquals(CodeCommand.FAILED, run("--list", "--password-stdin"));
+        assertTrue(err().contains("Enter a password."), err());
+        assertEquals("", out());
+    }
+
+    @Test
+    void readLineStopsAtTheLineEndAndRemovesAByteOrderMark() throws Exception
+    {
+        Charset ms932 = Charset.forName("MS932");
+        // the byte order mark gives the encoding, also when the system uses another one
+        for (Charset cs : List.of(StandardCharsets.UTF_8, StandardCharsets.UTF_16LE, StandardCharsets.UTF_16BE)) {
+            byte[] bom = "\uFEFF\u30D1\u30B9 word\r\nd".getBytes(cs);
+            assertArrayEquals("\u30D1\u30B9 word".toCharArray(), CodeCommand.readLine(new ByteArrayInputStream(bom), ms932),
+                              cs.name());
+        }
+        // a byte 0x0A inside a UTF-16 character is not a line end
+        byte[] utf16 = "\uFEFF\u010Ax\n".getBytes(StandardCharsets.UTF_16LE);
+        assertArrayEquals("\u010Ax".toCharArray(), CodeCommand.readLine(new ByteArrayInputStream(utf16), ms932));
+        assertArrayEquals("\u30D1\u30B9".toCharArray(),
+                          CodeCommand.readLine(new ByteArrayInputStream("\u30D1\u30B9\n".getBytes(ms932)), ms932));
+        assertNull(CodeCommand.readLine(new ByteArrayInputStream(new byte[0]), StandardCharsets.UTF_8));
+        assertNull(CodeCommand.readLine(new ByteArrayInputStream(new byte[5000]), StandardCharsets.UTF_8), "too long");
+    }
+
+    @Test
+    void writesTheNextCode()
+    {
+        now = NOW + 18_000; // 2 seconds left: no waiting for the next code
+        passwords.add("pw");
+
+        assertEquals(CodeCommand.OK, run("--code", "GitHub (me)", "--next"));
+        assertTrue(sleeps.isEmpty());
+        assertEquals(github.code(now / 1000 + 30) + System.lineSeparator(), out());
+    }
+
+    @Test
+    void writesTheCodeAsJson()
+    {
+        passwords.add("pw");
+
+        assertEquals(CodeCommand.OK, run("--code", "GitHub (me)", "--json"));
+        long t = NOW / 1000;
+        assertEquals("{\"name\":\"GitHub (me)\",\"code\":\"" + github.code(t) + "\",\"secondsLeft\":20,\"period\":30,"
+                     + "\"next\":\"" + github.code(t + 30) + "\"}" + System.lineSeparator(), out());
+    }
+
+    @Test
+    void jsonAfterWaiting()
+    {
+        now = NOW + 18_000;
+        passwords.add("pw");
+
+        assertEquals(CodeCommand.OK, run("--code", "GitHub (me)", "--json"));
+        assertTrue(out().contains("\"secondsLeft\":30,"), out());
+        assertTrue(out().contains("\"code\":\"" + github.code((NOW + 20_100) / 1000) + "\""), out());
+    }
+
+    @Test
+    void specialCharactersInJson() throws Exception
+    {
+        Account odd = new Account("a \"b\" \\ c\nd\u0001 日本語 😀", "JBSWY3DPEHPK3PXP");
+        SecretStore.PasswordKey key = SecretStore.PasswordKey.create("pw".toCharArray(), TEST_ITERATIONS);
+        Files.delete(config.toPath()); // a new file
+        AccountStore.save(config, List.of(odd, new Account("", "MFRGGZDFMZTWQ2LK", Account.SHA1, 8, 60)),
+                          AccountStore.Protection.PASSWORD, key, null);
+        key.destroy();
+        passwords.add("pw");
+
+        assertEquals(CodeCommand.OK, run("--list", "--json"));
+        String expected = "[{\"name\":\"a \\\"b\\\" \\\\ c\\nd\\u0001 \\u65e5\\u672c\\u8a9e \\ud83d\\ude00\",\"digits\":6,"
+                          + "\"period\":30},{\"name\":\"\",\"digits\":8,\"period\":60}]" + System.lineSeparator();
+        assertEquals(expected, out());
+        for (char c : out().toCharArray()) {
+            assertTrue(c < 0x80, "ASCII only");
+        }
+
+        // the empty name of the JSON finds the service without a name
+        out.reset();
+        passwords.add("pw");
+        assertEquals(CodeCommand.OK, run("--code", ""));
+        assertEquals(new Account("", "MFRGGZDFMZTWQ2LK", Account.SHA1, 8, 60).code(NOW / 1000) + System.lineSeparator(),
+                     out());
+    }
+
+    @Test
+    void jsonStringsAreEscaped()
+    {
+        assertEquals("\"\\\"\\\\\\n\\r\\t\\u0000\\u007f\\u00e9\"", CodeCommand.json("\"\\\n\r\t\u0000\u007f\u00e9"));
+        assertEquals("\"\"", CodeCommand.json(""));
+    }
+
+    @Test
+    void copiesTheCode() throws Exception
+    {
+        passwords.add("pw");
+
+        assertEquals(CodeCommand.OK, run("--code", "GitHub (me)", "--copy"));
+        assertEquals("", out(), "nothing on the standard output");
+        assertEquals(github.code(NOW / 1000), clipboard.getData(DataFlavor.stringFlavor));
+        assertTrue(err().contains("Copied the code of GitHub (me)."), err());
+    }
+
+    @Test
+    void copyFailsWithoutClipboard()
+    {
+        clipboard = null;
+        passwords.add("pw");
+
+        assertEquals(CodeCommand.FAILED, run("--code", "GitHub (me)", "--copy"));
+        assertTrue(err().contains("there is no clipboard"), err());
+    }
+
+    @Test
+    void usesTheGivenConfigurationFile() throws Exception
+    {
+        File other = new File(tmp, "other.properties");
+        SecretStore.PasswordKey key = SecretStore.PasswordKey.create("pw".toCharArray(), TEST_ITERATIONS);
+        AccountStore.save(other, List.of(new Account("Only", "GEZDGNBVGY3TQOJQ")), AccountStore.Protection.PASSWORD,
+                          key, null);
+        key.destroy();
+        passwords.add("pw");
+
+        assertEquals(CodeCommand.OK, run("--list", "--config", other.getPath()));
+        assertEquals("Only" + System.lineSeparator(), out());
+
+        assertEquals(CodeCommand.FAILED, run("--list", "--config", new File(tmp, "none").getPath()));
+        assertTrue(err().contains("There is no configuration file"), err());
+    }
+
+    @Test
+    void writesTheVersion()
+    {
+        assertEquals(CodeCommand.OK, run("--version"));
+        assertTrue(out().startsWith("et-otp-v2 "), out());
+        assertFalse(out().contains("null"), out());
+        assertTrue(prompts.isEmpty());
     }
 }
