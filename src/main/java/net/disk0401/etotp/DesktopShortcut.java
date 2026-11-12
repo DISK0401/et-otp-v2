@@ -97,6 +97,19 @@ final class DesktopShortcut
 
 
     /** @param oldConfig if not null: only update a shortcut that opens this file */
+    /**
+     * @return the full path of the Windows PowerShell: by name, Windows would look in the working directory
+     *         first, where another program of the same name could be
+     */
+    static String powershell()
+    {
+        String root = System.getenv("SystemRoot");
+        File exe = new File(root == null || root.isEmpty() ? "C:\\Windows" : root,
+                            "System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+        return exe.getAbsolutePath();
+    }
+
+
     private static String write(File configFile, String oldConfig) throws IOException
     {
         File jar = jar();
@@ -111,7 +124,7 @@ final class DesktopShortcut
         java.nio.file.Files.createDirectories(icon.toPath().getParent());
         AppIcon.writeIco(icon.toPath());
 
-        ProcessBuilder pb = new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive",
+        ProcessBuilder pb = new ProcessBuilder(powershell(), "-NoProfile", "-NonInteractive",
                                                "-ExecutionPolicy", "Bypass", "-Command", SCRIPT);
         Map<String, String> env = pb.environment();
         env.put("ETOTP_NAME", NAME);

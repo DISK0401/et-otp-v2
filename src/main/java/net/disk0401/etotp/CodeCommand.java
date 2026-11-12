@@ -5,6 +5,7 @@
  */
 package net.disk0401.etotp;
 
+import java.awt.AWTError;
 import java.awt.HeadlessException;
 import java.awt.Toolkit;
 import java.awt.datatransfer.Clipboard;
@@ -423,7 +424,7 @@ final class CodeCommand
             out.println(b.append(']'));
         } else {
             for (Account a : accounts) {
-                out.println(shownName(a));
+                out.println(printable(shownName(a)));
             }
         }
         out.flush();
@@ -436,13 +437,13 @@ final class CodeCommand
         if (found.isEmpty()) {
             List<String> names = new ArrayList<>();
             for (Account a : accounts) {
-                names.add(shownName(a));
+                names.add(printable(shownName(a)));
             }
-            err.println(msg.format("cli.notFound", o.name, String.join(", ", names)));
+            err.println(msg.format("cli.notFound", printable(o.name), String.join(", ", names)));
             return FAILED;
         }
         if (found.size() > 1) {
-            err.println(msg.format("cli.ambiguous", o.name));
+            err.println(msg.format("cli.ambiguous", printable(o.name)));
             return FAILED;
         }
         Account account = found.get(0);
@@ -471,11 +472,12 @@ final class CodeCommand
         } else if (o.copy) {
             try {
                 clipboard.get().setContents(new StringSelection(code), null);
-            } catch (HeadlessException | IllegalStateException e) {
+            } catch (HeadlessException | IllegalStateException | AWTError e) {
+                // AWTError: no display could be opened (DISPLAY not valid)
                 err.println(msg.get("cli.noClipboard"));
                 return FAILED;
             }
-            err.println(msg.format("status.copied", shownName(account)));
+            err.println(msg.format("status.copied", printable(shownName(account))));
         } else {
             out.println(code);
         }
@@ -518,6 +520,21 @@ final class CodeCommand
             }
         }
         return b.append('"').toString();
+    }
+
+
+    /**
+     * @return the text with control characters (line breaks, escape sequences of the terminal) replaced by
+     *         {@code ?}: a name from a QR code may contain them, and one name is one line of {@code --list}
+     */
+    static String printable(String s)
+    {
+        StringBuilder b = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            b.append(Character.isISOControl(c) ? '?' : c);
+        }
+        return b.toString();
     }
 
 

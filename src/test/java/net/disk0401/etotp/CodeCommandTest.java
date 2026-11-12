@@ -404,6 +404,24 @@ class CodeCommandTest
     }
 
     @Test
+    void controlCharactersAreNotWrittenToTheTerminal() throws Exception
+    {
+        Files.delete(config.toPath()); // a new file
+        SecretStore.PasswordKey key = SecretStore.PasswordKey.create("pw".toCharArray(), TEST_ITERATIONS);
+        AccountStore.save(config, List.of(new Account("a\nb\u001b[31mc\u009b", "JBSWY3DPEHPK3PXP")),
+                          AccountStore.Protection.PASSWORD, key, null);
+        key.destroy();
+        passwords.add("pw");
+
+        assertEquals(CodeCommand.OK, run("--list"));
+        assertEquals("a?b?[31mc?" + System.lineSeparator(), out());
+
+        passwords.add("pw");
+        assertEquals(CodeCommand.FAILED, run("--code", "x\u001by"));
+        assertTrue(err().contains("\"x?y\"") && err().contains("a?b?[31mc?") && !err().contains("\u001b"), err());
+    }
+
+    @Test
     void jsonStringsAreEscaped()
     {
         assertEquals("\"\\\"\\\\\\n\\r\\t\\u0000\\u007f\\u00e9\"", CodeCommand.json("\"\\\n\r\t\u0000\u007f\u00e9"));

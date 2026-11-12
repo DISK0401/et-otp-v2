@@ -1337,9 +1337,12 @@ public class GUI implements AccountRow.Actions
     @Override
     public void rename(Account account)
     {
+        if (!opened || lockPending) {
+            return; // chosen in a menu that was open when locking
+        }
         Object name = JOptionPane.showInputDialog(frame, msg.get("rename.prompt"), msg.get("row.rename"),
                                                   JOptionPane.PLAIN_MESSAGE, null, null, account.name());
-        if (name == null) {
+        if (name == null || !opened) {
             return;
         }
         String old = account.name();
@@ -1357,13 +1360,16 @@ public class GUI implements AccountRow.Actions
     @Override
     public void delete(Account account)
     {
+        if (!opened || lockPending) {
+            return; // chosen in a menu that was open when locking
+        }
         int answer = JOptionPane.showConfirmDialog(frame, msg.format("delete.confirm", displayName(account)),
                                                    msg.get("row.delete"), JOptionPane.OK_CANCEL_OPTION,
                                                    JOptionPane.WARNING_MESSAGE);
-        if (answer != JOptionPane.OK_OPTION) {
+        int index = accounts.indexOf(account);
+        if (answer != JOptionPane.OK_OPTION || !opened || index < 0) {
             return;
         }
-        int index = accounts.indexOf(account);
         accounts.remove(account);
         if (!persist()) {
             accounts.add(index, account);
@@ -1378,7 +1384,8 @@ public class GUI implements AccountRow.Actions
     public boolean canMove(Account account, AccountRow.Move where)
     {
         // while filtered, the neighbors in the list are not the ones shown
-        if (readOnlyReason != null || (searchField != null && AccountList.filters(searchField.getText()))) {
+        if (!opened || lockPending || readOnlyReason != null
+            || (searchField != null && AccountList.filters(searchField.getText()))) {
             return false;
         }
         int index = indexOf(account);
@@ -1820,6 +1827,8 @@ public class GUI implements AccountRow.Actions
             lockPending = false;
             return;
         }
+        // an open menu (the edit menu of a service) would still act on the list after the lock
+        MenuSelectionManager.defaultManager().clearSelectedPath();
         if (modalDialogShown()) {
             if (!lockPending) {
                 lockPending = true;
@@ -1887,6 +1896,18 @@ public class GUI implements AccountRow.Actions
     }
 
 
+    /** @return true if the configuration file is protected by a password (also in the format of et-otp 1.x) */
+    private boolean fileHasPassword()
+    {
+        try {
+            AccountStore.Kind kind = AccountStore.inspect(configFile);
+            return kind == AccountStore.Kind.PASSWORD || kind == AccountStore.Kind.LEGACY;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+
     private JPanel buildLockTab()
     {
         JPanel panel = new JPanel(new GridBagLayout());
@@ -1897,7 +1918,8 @@ public class GUI implements AccountRow.Actions
         c.fill = GridBagConstraints.HORIZONTAL;
         c.anchor = GridBagConstraints.NORTHWEST;
         c.insets = new Insets(2, 0, 2, 0);
-        boolean password = protection == AccountStore.Protection.PASSWORD;
+        boolean password = protection == AccountStore.Protection.PASSWORD
+                           || (protection == null && fileHasPassword()); // not unlocked yet
 
         int minutes = uiSettings.lockIdleMinutes();
         JCheckBox idle = new JCheckBox(msg.get("lock.idle"), minutes > 0);
