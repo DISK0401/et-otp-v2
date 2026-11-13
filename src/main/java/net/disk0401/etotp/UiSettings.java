@@ -30,6 +30,7 @@ final class UiSettings
     private static final String LOCK_IDLE = "lock.idleMinutes";
     private static final String LOCK_SYSTEM = "lock.onSystemLock";
     private static final String LOCK_MINIMIZE = "lock.onMinimize";
+    private static final String BACKUP_REMINDER = "backup.reminder";
 
     private final File file;
     private final Properties props;
@@ -166,6 +167,19 @@ final class UiSettings
     void setLockOnMinimize(boolean on)
     {
         props.setProperty(LOCK_MINIMIZE, Boolean.toString(on));
+    }
+
+
+    /** @return true to tell when services were added or deleted after the last backup (default) */
+    boolean backupReminder()
+    {
+        return !"false".equalsIgnoreCase(props.getProperty(BACKUP_REMINDER, "true").trim());
+    }
+
+
+    void setBackupReminder(boolean on)
+    {
+        props.setProperty(BACKUP_REMINDER, Boolean.toString(on));
     }
 
 

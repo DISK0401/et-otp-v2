@@ -53,6 +53,8 @@ final class SecretStore
     static final int CURRENT_VERSION = 2;
 
     private static final String PREFIX = "key.1.";
+    /** First part of the authenticated data of the configuration file. */
+    private static final String CONFIG_DOMAIN = "et-otp";
     private static final String KDF = "PBKDF2WithHmacSHA256";
     private static final String CIPHER = "AES/GCM/NoPadding";
     private static final int KEY_BITS = 256;
@@ -171,20 +173,40 @@ final class SecretStore
         /** Derives the key with the salt and iteration count stored in the properties. */
         static PasswordKey from(Properties p, char[] pass) throws IOException, GeneralSecurityException
         {
-            String kdf = required(p, "kdf");
-            String cipher = required(p, "cipher");
+            return from(p, PREFIX, pass);
+        }
+
+        /** Derives the key with the salt and iteration count stored in the properties under the prefix. */
+        static PasswordKey from(Properties p, String prefix, char[] pass) throws IOException, GeneralSecurityException
+        {
+            String kdf = required(p, prefix, "kdf");
+            String cipher = required(p, prefix, "cipher");
             int iterations;
             try {
-                iterations = Integer.parseInt(required(p, "iterations").trim());
+                iterations = Integer.parseInt(required(p, prefix, "iterations").trim());
             } catch (NumberFormatException e) {
-                throw new IOException("Invalid iteration count in configuration");
+                throw new IOException("Invalid iteration count in " + prefix + "iterations");
             }
             if (!KDF.equals(kdf) || !CIPHER.equals(cipher) || iterations < 1 || iterations > MAX_ITERATIONS) {
-                throw new IOException("Unsupported configuration parameters: " + kdf + ", " + cipher + ", " + iterations);
+                throw new IOException("Unsupported encryption parameters: " + kdf + ", " + cipher + ", " + iterations);
             }
-            byte[] salt = decode(p, "salt");
-            check(salt.length == SALT_BYTES, "salt", "must be " + SALT_BYTES + " bytes");
+            byte[] salt = decode(p, prefix, "salt");
+            check(salt.length == SALT_BYTES, prefix, "salt", "must be " + SALT_BYTES + " bytes");
             return new PasswordKey(deriveKey(kdf, pass, salt, iterations, KEY_BITS), salt, iterations);
+        }
+
+        /**
+         * Checks a password against this key (derives the key again with the same salt).
+         * The password array is not modified.
+         */
+        boolean matches(char[] pass) throws GeneralSecurityException
+        {
+            byte[] other = deriveKey(KDF, pass, salt, iterations, KEY_BITS);
+            try {
+                return java.security.MessageDigest.isEqual(key, other);
+            } finally {
+                Arrays.fill(other, (byte) 0);
+            }
         }
 
         /** Overwrites the key in memory; the object cannot be used afterwards. */
@@ -201,20 +223,31 @@ final class SecretStore
      */
     static void encrypt(Properties p, byte[] plain, PasswordKey key, int version) throws GeneralSecurityException
     {
+        encrypt(p, PREFIX, CONFIG_DOMAIN, plain, key, version);
+    }
+
+
+    /**
+     * Encrypts like {@link #encrypt(Properties, byte[], PasswordKey, int)}, with the properties under another prefix
+     * and another domain in the authenticated data, so data of one kind cannot be read as the other.
+     */
+    static void encrypt(Properties p, String prefix, String domain, byte[] plain, PasswordKey key, int version)
+            throws GeneralSecurityException
+    {
         byte[] iv = new byte[IV_BYTES];
         RANDOM.nextBytes(iv);
         Cipher c = Cipher.getInstance(CIPHER);
         c.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key.key, "AES"), new GCMParameterSpec(TAG_BITS, iv));
-        c.updateAAD(aad(version, KDF, key.iterations, CIPHER));
+        c.updateAAD(aad(domain, version, KDF, key.iterations, CIPHER));
         byte[] enc = c.doFinal(plain);
 
-        p.setProperty(PREFIX + "version", Integer.toString(version));
-        p.setProperty(PREFIX + "kdf", KDF);
-        p.setProperty(PREFIX + "iterations", Integer.toString(key.iterations));
-        p.setProperty(PREFIX + "cipher", CIPHER);
-        p.setProperty(PREFIX + "salt", Base32.encode(key.salt));
-        p.setProperty(PREFIX + "iv", Base32.encode(iv));
-        p.setProperty(PREFIX + "encoded", Base32.encode(enc));
+        p.setProperty(prefix + "version", Integer.toString(version));
+        p.setProperty(prefix + "kdf", KDF);
+        p.setProperty(prefix + "iterations", Integer.toString(key.iterations));
+        p.setProperty(prefix + "cipher", CIPHER);
+        p.setProperty(prefix + "salt", Base32.encode(key.salt));
+        p.setProperty(prefix + "iv", Base32.encode(iv));
+        p.setProperty(prefix + "encoded", Base32.encode(enc));
     }
 
 
@@ -225,13 +258,21 @@ final class SecretStore
      */
     static byte[] decrypt(Properties p, PasswordKey key, int version) throws IOException, GeneralSecurityException
     {
-        byte[] iv = decode(p, "iv");
-        byte[] enc = decode(p, "encoded");
-        check(iv.length == IV_BYTES, "iv", "must be " + IV_BYTES + " bytes");
-        check(enc.length > TAG_BITS / 8, "encoded", "too short");
+        return decrypt(p, PREFIX, CONFIG_DOMAIN, key, version);
+    }
+
+
+    /** Decrypts data written by {@link #encrypt(Properties, String, String, byte[], PasswordKey, int)}. */
+    static byte[] decrypt(Properties p, String prefix, String domain, PasswordKey key, int version)
+            throws IOException, GeneralSecurityException
+    {
+        byte[] iv = decode(p, prefix, "iv");
+        byte[] enc = decode(p, prefix, "encoded");
+        check(iv.length == IV_BYTES, prefix, "iv", "must be " + IV_BYTES + " bytes");
+        check(enc.length > TAG_BITS / 8, prefix, "encoded", "too short");
         Cipher c = Cipher.getInstance(CIPHER);
         c.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key.key, "AES"), new GCMParameterSpec(TAG_BITS, iv));
-        c.updateAAD(aad(version, KDF, key.iterations, CIPHER));
+        c.updateAAD(aad(domain, version, KDF, key.iterations, CIPHER));
         return c.doFinal(enc);
     }
 
@@ -380,17 +421,17 @@ final class SecretStore
     }
 
 
-    private static byte[] aad(int version, String kdf, int iterations, String cipher)
+    private static byte[] aad(String domain, int version, String kdf, int iterations, String cipher)
     {
-        return ("et-otp|" + version + "|" + kdf + "|" + iterations + "|" + cipher).getBytes(StandardCharsets.US_ASCII);
+        return (domain + "|" + version + "|" + kdf + "|" + iterations + "|" + cipher).getBytes(StandardCharsets.US_ASCII);
     }
 
 
-    private static String required(Properties p, String name) throws IOException
+    private static String required(Properties p, String prefix, String name) throws IOException
     {
-        String v = p.getProperty(PREFIX + name);
+        String v = p.getProperty(prefix + name);
         if (v == null || v.trim().isEmpty()) {
-            throw new IOException("Configuration file is incomplete (missing " + PREFIX + name + ")");
+            throw new IOException("File is incomplete (missing " + prefix + name + ")");
         }
         return v;
     }
@@ -398,19 +439,31 @@ final class SecretStore
 
     private static byte[] decode(Properties p, String name) throws IOException
     {
+        return decode(p, PREFIX, name);
+    }
+
+
+    private static byte[] decode(Properties p, String prefix, String name) throws IOException
+    {
         try {
-            return Base32.decode(required(p, name).trim());
+            return Base32.decode(required(p, prefix, name).trim());
         } catch (DecodingException e) {
-            throw new IOException("Invalid " + PREFIX + name + " in configuration: " + e.getMessage());
+            throw new IOException("Invalid " + prefix + name + ": " + e.getMessage());
         }
     }
 
 
-    /** Reports a malformed value as a configuration error before it reaches the crypto API. */
     private static void check(boolean valid, String name, String problem) throws IOException
     {
+        check(valid, PREFIX, name, problem);
+    }
+
+
+    /** Reports a malformed value as a file error before it reaches the crypto API. */
+    private static void check(boolean valid, String prefix, String name, String problem) throws IOException
+    {
         if (!valid) {
-            throw new IOException("Invalid " + PREFIX + name + " in configuration: " + problem);
+            throw new IOException("Invalid " + prefix + name + ": " + problem);
         }
     }
 

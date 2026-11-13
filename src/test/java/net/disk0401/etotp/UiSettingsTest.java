@@ -64,6 +64,19 @@ class UiSettingsTest
         assertEquals(1, tmp.list().length);
     }
 
+    /** et-otp-v2 issue #18: the reminder to make a backup is on by default and can be turned off. */
+    @Test
+    void backupReminderCanBeTurnedOff() throws Exception
+    {
+        File f = new File(tmp, UiSettings.FILE_NAME);
+        UiSettings s = UiSettings.load(f);
+        org.junit.jupiter.api.Assertions.assertTrue(s.backupReminder());
+        s.setBackupReminder(false);
+        s.save();
+
+        org.junit.jupiter.api.Assertions.assertFalse(UiSettings.load(f).backupReminder());
+    }
+
     @Test
     void copyKeepsTheValuesInTheNewFile() throws Exception
     {
