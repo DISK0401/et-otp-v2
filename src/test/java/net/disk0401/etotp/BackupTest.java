@@ -138,6 +138,24 @@ class BackupTest
         assertTrue(e.getMessage().contains("configuration file"), e.getMessage());
     }
 
+    /** The file is checked before its password is asked. */
+    @Test
+    void wrongFilesAreFoundWithoutThePassword() throws Exception
+    {
+        File f = new File(tmp, "b" + Backup.EXTENSION);
+        Backup.write(f, accounts(), PASS, TEST_ITERATIONS);
+        Backup.check(f);
+
+        File config = new File(tmp, "c.properties");
+        AccountStore.save(config, accounts(), AccountStore.Protection.PASSWORD,
+                          SecretStore.PasswordKey.create(PASS, TEST_ITERATIONS), null);
+        assertThrows(IOException.class, () -> Backup.check(config));
+        assertThrows(IOException.class, () -> Backup.check(new File(tmp, "missing" + Backup.EXTENSION)));
+        String text = Files.readString(f.toPath(), StandardCharsets.ISO_8859_1);
+        Files.writeString(f.toPath(), text.replace("backup.version=1", "backup.version=2"), StandardCharsets.ISO_8859_1);
+        assertThrows(IOException.class, () -> Backup.check(f));
+    }
+
     @Test
     void backupIsNoConfigurationFile() throws Exception
     {

@@ -64,6 +64,15 @@ final class Backup
             Properties p = new Properties();
             SecretStore.encrypt(p, PREFIX, DOMAIN, plain, key, VERSION);
             AtomicFiles.store(p, file, "et-otp-v2 backup of the registered services (encrypted)");
+            // read back: a backup that cannot be restored is only found when it is needed
+            byte[] written = SecretStore.decrypt(load(file), PREFIX, DOMAIN, key, VERSION);
+            try {
+                if (!Arrays.equals(plain, written)) {
+                    throw new IOException("The written backup differs from the services: " + file);
+                }
+            } finally {
+                Arrays.fill(written, (byte) 0);
+            }
         } finally {
             key.destroy();
             Arrays.fill(plain, (byte) 0);
@@ -79,9 +88,39 @@ final class Backup
      */
     static List<Account> read(File file, char[] pass) throws IOException, GeneralSecurityException
     {
+        Properties p = load(file);
+        SecretStore.PasswordKey key = SecretStore.PasswordKey.from(p, PREFIX, pass);
+        byte[] plain = null;
+        try {
+            plain = SecretStore.decrypt(p, PREFIX, DOMAIN, key, VERSION);
+            return AccountStore.parse(plain);
+        } finally {
+            key.destroy();
+            if (plain != null) {
+                Arrays.fill(plain, (byte) 0);
+            }
+        }
+    }
+
+
+    /**
+     * Checks that the file is a backup of a supported version, before its password is asked.
+     *
+     * @throws IOException if the file is no backup or of an unsupported version
+     */
+    static void check(File file) throws IOException
+    {
+        load(file);
+    }
+
+
+    private static Properties load(File file) throws IOException
+    {
         Properties p = new Properties();
         try (java.io.InputStream is = Files.newInputStream(file.toPath())) {
             p.load(is);
+        } catch (java.nio.file.NoSuchFileException e) {
+            throw new IOException("File not found: " + file);
         } catch (IllegalArgumentException e) {
             throw new IOException("Not an et-OTP-v2 backup: " + file);
         }
@@ -101,17 +140,7 @@ final class Backup
             throw new IOException("Unsupported backup format version " + version
                                   + " (this program supports up to " + VERSION + ")");
         }
-        SecretStore.PasswordKey key = SecretStore.PasswordKey.from(p, PREFIX, pass);
-        byte[] plain = null;
-        try {
-            plain = SecretStore.decrypt(p, PREFIX, DOMAIN, key, VERSION);
-            return AccountStore.parse(plain);
-        } finally {
-            key.destroy();
-            if (plain != null) {
-                Arrays.fill(plain, (byte) 0);
-            }
-        }
+        return p;
     }
 
 

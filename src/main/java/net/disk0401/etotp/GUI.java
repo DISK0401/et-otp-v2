@@ -1969,10 +1969,16 @@ public class GUI implements AccountRow.Actions
             if (key != null) {
                 return key.matches(pass);
             }
-            // a file of et-otp 1.x or 2.0 that could not be converted: opened read-only, without a key
+            // a file of et-otp 1.x or 2.0 that could not be converted: opened read-only, without a key. The format
+            // of et-otp 1.x accepts about one wrong password in 256, so the secret must be the one shown
             byte[] secret = SecretStore.read(configFile, pass).secret();
-            Arrays.fill(secret, (byte) 0);
-            return true;
+            try {
+                return accounts.size() == 1 && new Account("", Base32.encode(secret)).secret().equals(accounts.get(0).secret());
+            } catch (Account.InvalidException e) {
+                return false;
+            } finally {
+                Arrays.fill(secret, (byte) 0);
+            }
         } catch (BadPaddingException | InvalidKeySpecException | IllegalArgumentException e) {
             return false;
         } finally {
@@ -2025,6 +2031,13 @@ public class GUI implements AccountRow.Actions
         if (file == null) {
             return;
         }
+        try {
+            Backup.check(file); // before the password is asked
+        } catch (IOException | RuntimeException e) {
+            JOptionPane.showMessageDialog(frame, msg.format("error.restore", e.getMessage()),
+                                          msg.get("restore.title"), JOptionPane.ERROR_MESSAGE);
+            return;
+        }
         JPasswordField pass = new JPasswordField(20);
         JPanel form = form(new String[] { msg.get("restore.password") }, new JComponent[] { pass });
         List<Account> restored = null;
@@ -2065,6 +2078,11 @@ public class GUI implements AccountRow.Actions
             setStatus(msg.get("status.lockedNotSaved"), true);
             return;
         }
+        if (restored.isEmpty()) {
+            JOptionPane.showMessageDialog(frame, msg.get("restore.empty"), msg.get("restore.title"),
+                                          JOptionPane.WARNING_MESSAGE);
+            return;
+        }
         List<Account> added = Backup.newServices(accounts, restored);
         Object[] options = { msg.get("restore.add"), msg.get("restore.replace"), msg.get("wizard.cancel") };
         int choice = JOptionPane.showOptionDialog(frame, msg.format("restore.text", restored.size(), added.size(),
@@ -2085,18 +2103,28 @@ public class GUI implements AccountRow.Actions
             setStatus(msg.get("status.lockedNotSaved"), true);
             return;
         }
-        if (!replace && added.isEmpty()) {
-            setStatus(msg.get("status.restoreNothing"), false);
-            return;
-        }
+        // again: a service may have been added (a QR code read in the background) while the dialogs were open
+        added = Backup.newServices(accounts, restored);
+        String restoredMark = Backup.fingerprint(restored);
         List<Account> before = new ArrayList<>(accounts);
         String oldMark = backupMark;
         if (replace) {
             accounts.clear();
             accounts.addAll(restored);
-            backupMark = Backup.fingerprint(restored); // the services are those of the backup
         } else {
             accounts.addAll(added);
+        }
+        // the services are those of the backup (also after adding to an empty list): it need not be exported again
+        if (restoredMark.equals(Backup.fingerprint(accounts))) {
+            backupMark = restoredMark;
+        }
+        if (!replace && added.isEmpty()) {
+            if (!java.util.Objects.equals(backupMark, oldMark) && readOnlyReason == null && !persist()) {
+                backupMark = oldMark;
+            }
+            updateBackupHint();
+            setStatus(msg.get("status.restoreNothing"), false);
+            return;
         }
         if (!persist()) {
             accounts.clear();
