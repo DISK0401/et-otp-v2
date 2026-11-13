@@ -135,6 +135,8 @@ public class GUI implements AccountRow.Actions
     private byte[] fileContent;
     /** why the account list cannot be changed (see {@link AccountStore.Opened#readOnlyReason}), else null. */
     private String readOnlyReason;
+    /** {@link Backup#fingerprint} of the services at the last backup, or null if none was exported (issue #18). */
+    private String backupMark;
     /** prevents a second instance with the same configuration file; held until the program ends. */
     private static FileLock instanceLock;
     /** why the instance lock could not be created; the account list is then opened read-only. */
@@ -179,6 +181,10 @@ public class GUI implements AccountRow.Actions
     /** true from a lock until the list is opened again. */
     private boolean locked;
     private JMenuItem lockItem;
+    private JMenuItem backupItem;
+    private JMenuItem restoreItem;
+    /** under the list: services were added or deleted after the last backup. */
+    private JTextArea backupHint;
 
     private JDialog settingsDialog;
     private JDialog aboutDialog;
@@ -392,6 +398,7 @@ public class GUI implements AccountRow.Actions
         }
         key = o.key;
         fileContent = o.source;
+        backupMark = o.backupMark;
         readOnlyReason = o.readOnlyReason != null ? o.readOnlyReason : lockProblem;
         opened = true;
         lockPending = false;
@@ -465,7 +472,7 @@ public class GUI implements AccountRow.Actions
             return false;
         }
         try {
-            fileContent = AccountStore.save(configFile, accounts, protection, key, fileContent);
+            fileContent = AccountStore.save(configFile, accounts, backupMark, protection, key, fileContent);
             return true;
         } catch (IOException | GeneralSecurityException | RuntimeException ex) {
             JOptionPane.showMessageDialog(frame, msg.format("error.save", ex.getClass().getName() + ": " + ex.getMessage()),
@@ -530,6 +537,7 @@ public class GUI implements AccountRow.Actions
         }
         key = newKey;
         fileContent = null; // a new file
+        backupMark = null;
         readOnlyReason = null;
         if (!persist()) {
             if (key != null) {
@@ -847,6 +855,13 @@ public class GUI implements AccountRow.Actions
                                                        Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         lockItem.setEnabled(canLock());
         m.add(lockItem);
+        m.addSeparator();
+        backupItem = menuItem("menu.backup", e -> exportBackup());
+        m.add(backupItem);
+        restoreItem = menuItem("menu.restore", e -> restoreBackup());
+        m.add(restoreItem);
+        updateLockItem();
+        m.addSeparator();
         if (DesktopShortcut.isSupported()) {
             m.add(menuItem("menu.shortcut", e -> createShortcut()));
         }
@@ -1008,6 +1023,11 @@ public class GUI implements AccountRow.Actions
         scroll.getViewport().setBackground(listPanel.getBackground());
         scroll.setPreferredSize(new Dimension(Math.max(460, buttons.getPreferredSize().width), 300));
         panel.add(scroll, BorderLayout.CENTER);
+        backupHint = createStatusArea();
+        backupHint.setForeground(Color.DARK_GRAY);
+        backupHint.setBorder(BorderFactory.createEmptyBorder(6, 10, 0, 10));
+        backupHint.setVisible(false);
+        panel.add(backupHint, BorderLayout.SOUTH);
         return panel;
     }
 
@@ -1251,6 +1271,7 @@ public class GUI implements AccountRow.Actions
         noMatchText.setVisible(false);
         listPanel.add(noMatchText);
         applyFilter(true);
+        updateBackupHint();
     }
 
 
@@ -1797,6 +1818,327 @@ public class GUI implements AccountRow.Actions
     }
 
 
+    // --- backup (issue #18) ---
+
+    /** @return true while the services can be exported or changed: open, and no lock requested */
+    private boolean listUsable()
+    {
+        return opened && !lockPending && !locked;
+    }
+
+
+    /** Shows under the list that services were added or deleted after the last backup (if wanted). */
+    private void updateBackupHint()
+    {
+        if (backupHint == null) {
+            return;
+        }
+        String text = null;
+        if (opened && uiSettings.backupReminder() && !accounts.isEmpty()) {
+            if (backupMark == null) {
+                text = msg.format("backup.hint.never", PROGNAME);
+            } else if (!backupMark.equals(Backup.fingerprint(accounts))) {
+                text = msg.format("backup.hint.changed", PROGNAME);
+            }
+        }
+        if (text != null) {
+            backupHint.setText(text);
+        }
+        if (backupHint.isVisible() != (text != null)) {
+            backupHint.setVisible(text != null);
+        }
+        backupHint.revalidate();
+    }
+
+
+    /** A form of labels and fields, one row each. */
+    private static JPanel form(String[] labels, JComponent[] fields)
+    {
+        JPanel form = new JPanel(new GridBagLayout());
+        GridBagConstraints c = new GridBagConstraints();
+        c.insets = new Insets(5, 0, 5, 10);
+        for (int i = 0; i < labels.length; i++) {
+            c.gridx = 0;
+            c.gridy = i;
+            c.anchor = GridBagConstraints.EAST;
+            c.fill = GridBagConstraints.NONE;
+            c.weightx = 0;
+            JLabel label = new JLabel(labels[i], SwingConstants.RIGHT);
+            label.setLabelFor(fields[i]);
+            form.add(label, c);
+            c.gridx = 1;
+            c.anchor = GridBagConstraints.WEST;
+            c.fill = GridBagConstraints.HORIZONTAL;
+            c.weightx = 1;
+            form.add(fields[i], c);
+        }
+        return form;
+    }
+
+
+    /** Lets the user check the password, choose a backup password and a file, and exports the services. */
+    private void exportBackup()
+    {
+        if (!listUsable()) {
+            return; // chosen in a menu that was open when locking
+        }
+        boolean askCurrent = protection == AccountStore.Protection.PASSWORD;
+        JPasswordField current = new JPasswordField(20);
+        JPasswordField pass = new JPasswordField(20);
+        JPasswordField confirm = new JPasswordField(20);
+        JPanel panel = new JPanel(new BorderLayout(0, 8));
+        JLabel text = SetupWizard.note(msg.get("backup.text"));
+        text.setBorder(BorderFactory.createEmptyBorder());
+        panel.add(text, BorderLayout.NORTH);
+        panel.add(askCurrent
+                  ? form(new String[] { msg.get("backup.current"), msg.get("backup.password"), msg.get("backup.confirm") },
+                         new JComponent[] { current, pass, confirm })
+                  : form(new String[] { msg.get("backup.password"), msg.get("backup.confirm") },
+                         new JComponent[] { pass, confirm }),
+                  BorderLayout.CENTER);
+        char[] p = new char[0];
+        char[] cf = new char[0];
+        char[] cur = new char[0];
+        try {
+            while (true) {
+                int answer = JOptionPane.showConfirmDialog(frame, panel, msg.get("backup.title"),
+                                                           JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+                if (answer != JOptionPane.OK_OPTION) {
+                    return;
+                }
+                if (!listUsable()) {
+                    setStatus(msg.get("status.lockedNotSaved"), true);
+                    return;
+                }
+                clear(p);
+                clear(cf);
+                clear(cur);
+                p = pass.getPassword();
+                cf = confirm.getPassword();
+                cur = current.getPassword();
+                current.setText("");
+                String problem = SecretInput.checkPassword(p, cf);
+                if (problem == null && askCurrent && !currentPasswordMatches(cur)) {
+                    problem = "backup.badPassword";
+                }
+                if (problem == null) {
+                    break;
+                }
+                JOptionPane.showMessageDialog(frame, msg.get(problem), msg.get("backup.title"),
+                                              JOptionPane.WARNING_MESSAGE);
+            }
+            File file = chooseBackupFile(true);
+            if (file == null) {
+                return;
+            }
+            if (!listUsable()) {
+                setStatus(msg.get("status.lockedNotSaved"), true);
+                return;
+            }
+            List<Account> services = new ArrayList<>(accounts);
+            frame.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+            Backup.write(file, services, p, SecretStore.DEFAULT_ITERATIONS);
+            String oldMark = backupMark;
+            backupMark = Backup.fingerprint(services);
+            // remembered in the configuration file, so the reminder knows it at the next start
+            if (readOnlyReason == null && !backupMark.equals(oldMark) && !persist()) {
+                backupMark = oldMark;
+            }
+            updateBackupHint();
+            setStatus(msg.format("status.backupWritten", file.getAbsolutePath()), false);
+        } catch (IOException | GeneralSecurityException | RuntimeException e) {
+            JOptionPane.showMessageDialog(frame, msg.format("error.backup", e.getMessage()), msg.get("backup.title"),
+                                          JOptionPane.ERROR_MESSAGE);
+        } finally {
+            clear(p);
+            clear(cf);
+            clear(cur);
+            current.setText("");
+            pass.setText("");
+            confirm.setText("");
+            frame.setCursor(Cursor.getDefaultCursor());
+        }
+    }
+
+
+    /** @return true if the password opens the configuration file */
+    private boolean currentPasswordMatches(char[] pass) throws IOException, GeneralSecurityException
+    {
+        frame.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+        try {
+            if (key != null) {
+                return key.matches(pass);
+            }
+            // a file of et-otp 1.x or 2.0 that could not be converted: opened read-only, without a key. The format
+            // of et-otp 1.x accepts about one wrong password in 256, so the secret must be the one shown
+            byte[] secret = SecretStore.read(configFile, pass).secret();
+            try {
+                return accounts.size() == 1 && new Account("", Base32.encode(secret)).secret().equals(accounts.get(0).secret());
+            } catch (Account.InvalidException e) {
+                return false;
+            } finally {
+                Arrays.fill(secret, (byte) 0);
+            }
+        } catch (BadPaddingException | InvalidKeySpecException | IllegalArgumentException e) {
+            return false;
+        } finally {
+            frame.setCursor(Cursor.getDefaultCursor());
+        }
+    }
+
+
+    /** @return the backup file to write (confirmed if it exists) or to read, or null if cancelled */
+    private File chooseBackupFile(boolean save)
+    {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle(msg.get(save ? "backup.title" : "restore.title"));
+        FileNameExtensionFilter filter = new FileNameExtensionFilter(msg.get("backup.fileType"),
+                                                                     Backup.EXTENSION.substring(1));
+        chooser.setFileFilter(filter);
+        if (save) {
+            chooser.setSelectedFile(new File(chooser.getCurrentDirectory(),
+                                             "et-otp-v2-backup-" + java.time.LocalDate.now() + Backup.EXTENSION));
+        }
+        while (true) {
+            int answer = save ? chooser.showSaveDialog(frame) : chooser.showOpenDialog(frame);
+            if (answer != JFileChooser.APPROVE_OPTION) {
+                return null;
+            }
+            File file = chooser.getSelectedFile();
+            if (!save) {
+                return file;
+            }
+            if (chooser.getFileFilter() == filter && !file.getName().contains(".")) {
+                file = new File(file.getPath() + Backup.EXTENSION);
+            }
+            if (!file.exists()
+                || JOptionPane.showConfirmDialog(frame, msg.format("backup.exists", file.getAbsolutePath()),
+                                                 msg.get("backup.title"), JOptionPane.YES_NO_OPTION,
+                                                 JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION) {
+                return file;
+            }
+        }
+    }
+
+
+    /** Reads a backup and adds its services, or replaces the registered services with them. */
+    private void restoreBackup()
+    {
+        if (!listUsable() || readOnlyReason != null) {
+            return; // chosen in a menu that was open when locking
+        }
+        File file = chooseBackupFile(false);
+        if (file == null) {
+            return;
+        }
+        try {
+            Backup.check(file); // before the password is asked
+        } catch (IOException | RuntimeException e) {
+            JOptionPane.showMessageDialog(frame, msg.format("error.restore", e.getMessage()),
+                                          msg.get("restore.title"), JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        JPasswordField pass = new JPasswordField(20);
+        JPanel form = form(new String[] { msg.get("restore.password") }, new JComponent[] { pass });
+        List<Account> restored = null;
+        while (restored == null) {
+            int answer = JOptionPane.showConfirmDialog(frame, form, msg.get("restore.title"),
+                                                       JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (answer != JOptionPane.OK_OPTION) {
+                return;
+            }
+            if (!listUsable()) {
+                setStatus(msg.get("status.lockedNotSaved"), true);
+                return;
+            }
+            char[] p = pass.getPassword();
+            pass.setText("");
+            String problem = null;
+            frame.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+            try {
+                restored = Backup.read(file, p);
+            } catch (BadPaddingException e) {
+                problem = msg.get("restore.badPassword");
+            } catch (InvalidKeySpecException | IllegalArgumentException e) {
+                problem = msg.get("error.password.empty");
+            } catch (IOException | GeneralSecurityException | RuntimeException e) {
+                frame.setCursor(Cursor.getDefaultCursor());
+                JOptionPane.showMessageDialog(frame, msg.format("error.restore", e.getMessage()),
+                                              msg.get("restore.title"), JOptionPane.ERROR_MESSAGE);
+                return;
+            } finally {
+                clear(p);
+                frame.setCursor(Cursor.getDefaultCursor());
+            }
+            if (problem != null) {
+                JOptionPane.showMessageDialog(frame, problem, msg.get("restore.title"), JOptionPane.WARNING_MESSAGE);
+            }
+        }
+        if (!listUsable()) {
+            setStatus(msg.get("status.lockedNotSaved"), true);
+            return;
+        }
+        if (restored.isEmpty()) {
+            JOptionPane.showMessageDialog(frame, msg.get("restore.empty"), msg.get("restore.title"),
+                                          JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        List<Account> added = Backup.newServices(accounts, restored);
+        Object[] options = { msg.get("restore.add"), msg.get("restore.replace"), msg.get("wizard.cancel") };
+        int choice = JOptionPane.showOptionDialog(frame, msg.format("restore.text", restored.size(), added.size(),
+                                                                    accounts.size()),
+                                                  msg.get("restore.title"), JOptionPane.YES_NO_CANCEL_OPTION,
+                                                  JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+        if (choice != 0 && choice != 1) {
+            return;
+        }
+        boolean replace = choice == 1;
+        if (replace && !accounts.isEmpty() && listUsable()
+            && JOptionPane.showConfirmDialog(frame, msg.format("restore.replace.confirm", accounts.size()),
+                                             msg.get("restore.title"), JOptionPane.OK_CANCEL_OPTION,
+                                             JOptionPane.WARNING_MESSAGE) != JOptionPane.OK_OPTION) {
+            return;
+        }
+        if (!listUsable()) {
+            setStatus(msg.get("status.lockedNotSaved"), true);
+            return;
+        }
+        // again: a service may have been added (a QR code read in the background) while the dialogs were open
+        added = Backup.newServices(accounts, restored);
+        String restoredMark = Backup.fingerprint(restored);
+        List<Account> before = new ArrayList<>(accounts);
+        String oldMark = backupMark;
+        if (replace) {
+            accounts.clear();
+            accounts.addAll(restored);
+        } else {
+            accounts.addAll(added);
+        }
+        // the services are those of the backup (also after adding to an empty list): it need not be exported again
+        if (restoredMark.equals(Backup.fingerprint(accounts))) {
+            backupMark = restoredMark;
+        }
+        if (!replace && added.isEmpty()) {
+            if (!java.util.Objects.equals(backupMark, oldMark) && readOnlyReason == null && !persist()) {
+                backupMark = oldMark;
+            }
+            updateBackupHint();
+            setStatus(msg.get("status.restoreNothing"), false);
+            return;
+        }
+        if (!persist()) {
+            accounts.clear();
+            accounts.addAll(before);
+            backupMark = oldMark;
+            return;
+        }
+        searchField.setText(""); // the restored services are shown even if the list was filtered
+        rebuildList();
+        setStatus(replace ? msg.format("status.restoreReplaced", restored.size())
+                          : msg.format("status.restoreAdded", added.size()), false);
+    }
+
+
     // --- locking (issue #22) ---
 
     /** @return true if the list is open and protected by a password: only then a lock can be unlocked again */
@@ -1810,6 +2152,10 @@ public class GUI implements AccountRow.Actions
     {
         if (lockItem != null) {
             lockItem.setEnabled(canLock());
+        }
+        if (backupItem != null) {
+            backupItem.setEnabled(listUsable());
+            restoreItem.setEnabled(listUsable() && readOnlyReason == null);
         }
     }
 
@@ -1878,6 +2224,7 @@ public class GUI implements AccountRow.Actions
             key = null;
         }
         fileContent = null;
+        backupMark = null;
         selectedRow = -1;
         if (searchField != null) {
             searchField.setText("");
@@ -2136,6 +2483,20 @@ public class GUI implements AccountRow.Actions
         languageRow.add(Box.createHorizontalStrut(10));
         languageRow.add(language);
         panel.add(languageRow, c);
+
+        JCheckBox reminder = new JCheckBox(msg.get("settings.backupReminder"), uiSettings.backupReminder());
+        reminder.addActionListener(e -> {
+            uiSettings.setBackupReminder(reminder.isSelected());
+            try {
+                uiSettings.save();
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(settingsDialog, msg.format("error.uiSettings", ex.getMessage()),
+                                              settingsDialog.getTitle(), JOptionPane.WARNING_MESSAGE);
+            }
+            updateBackupHint();
+        });
+        c.insets = new Insets(12, 0, 0, 0);
+        panel.add(reminder, c);
 
         c.insets = new Insets(20, 0, 0, 0);
         panel.add(new JLabel(msg.get("settings.file")), c);

@@ -20,6 +20,7 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 - Holds any number of services. Click a code or press Copy to copy it to the clipboard.
 - Registers a service by reading the QR code shown on the screen; on Windows also from a window behind other windows. A QR code image file or the key typed in also works.
 - Stores the services encrypted in `.et-otp.properties`. On Windows, choose between protection for your Windows user (DPAPI, no password) and a password (PBKDF2-HMAC-SHA256 and AES-256-GCM); on macOS and Linux a password is used.
+- Exports the services to a file encrypted with a password of its own. With protection for your Windows user, too, this backup can be restored on another computer.
 - The user interface is in English and Japanese. It is shown in Japanese if the language of the OS is Japanese, else in English, and can be switched on the General tab of the settings.
 - When started without a configuration file, a setup wizard opens. It asks for the protection and the location of the configuration file and, on Windows, can create a desktop shortcut. You can also choose an existing configuration file and keep using it.
 - The window opens where it was when the program was last closed.
@@ -87,6 +88,17 @@ For `--password-stdin`, give the password for example from a file that other use
 ```
 
 There is no way to give the password in an environment variable or as an argument: arguments can be seen by other programs, and environment variables can be read by other programs of the same user and are passed on to the programs started. `echo password | ...` works as well, but cmd starts the left side of the pipe as another cmd, whose command line, with the password, can be seen by other programs; the password also stays in the batch file or the command history. In cmd, `echo password | ...` also passes the space before the "|": write `echo password| ...` without the space.
+
+## Backup and restore
+
+A configuration file protected for your Windows user cannot be opened on another computer or by another Windows user. Export a backup in case the computer breaks or the operating system is installed again.
+
+- **Export backup...** in the **et-OTP-v2** menu writes the services to one file, encrypted with a backup password chosen at that time (PBKDF2-HMAC-SHA256 and AES-256-GCM). With password protection, the current password is asked as well.
+- **Restore from backup...** asks for the file and the backup password, and then for **Add** or **Replace**. **Add** registers the services whose key is not registered yet. **Replace** deletes the registered services and registers the services of the backup.
+- A wrong password or a damaged file leaves the configuration file unchanged.
+- If no backup was exported, or services were added or deleted after it, a note is shown under the list. It can be turned off on the **General** tab of the settings.
+
+To restore on a new computer, create a configuration file with the setup wizard first, then choose **Restore from backup...**.
 
 ## Upgrading from et-otp 1.x and et-otp-v2 2.0
 

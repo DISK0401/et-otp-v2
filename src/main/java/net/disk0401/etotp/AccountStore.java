@@ -77,6 +77,8 @@ final class AccountStore
     private static final String PREFIX = "key.1.";
     private static final String PROTECTION = PREFIX + "protection";
     private static final String ENCODED = PREFIX + "encoded";
+    /** In the plain account list: the services at the last backup (older versions ignore and drop it). */
+    private static final String BACKUP_MARK = "backup.mark";
     /** Additional entropy for DPAPI, so other programs using DPAPI for the same user cannot simply decrypt. */
     private static final byte[] DPAPI_ENTROPY = "et-otp-v2/accounts/3".getBytes(StandardCharsets.UTF_8);
 
@@ -96,9 +98,11 @@ final class AccountStore
          * The accounts can be shown, but not changed.
          */
         final String readOnlyReason;
+        /** {@link Backup#fingerprint} of the services at the last backup, or null if none was written. */
+        final String backupMark;
 
         Opened(List<Account> accounts, Protection protection, SecretStore.PasswordKey key, File backup,
-               byte[] source, String readOnlyReason)
+               byte[] source, String readOnlyReason, String backupMark)
         {
             this.accounts = accounts;
             this.protection = protection;
@@ -106,6 +110,7 @@ final class AccountStore
             this.backup = backup;
             this.source = source;
             this.readOnlyReason = readOnlyReason;
+            this.backupMark = backupMark;
         }
     }
 
@@ -166,7 +171,7 @@ final class AccountStore
         checkVersion(p, Protection.WINDOWS_USER);
         byte[] plain = Dpapi.unprotect(base32(p.getProperty(ENCODED)), DPAPI_ENTROPY);
         try {
-            return new Opened(parse(plain), Protection.WINDOWS_USER, null, null, source, null);
+            return new Opened(parse(plain), Protection.WINDOWS_USER, null, null, source, null, backupMark(plain));
         } finally {
             Arrays.fill(plain, (byte) 0);
         }
@@ -192,7 +197,7 @@ final class AccountStore
         byte[] plain = null;
         try {
             plain = SecretStore.decrypt(p, key, VERSION);
-            Opened o = new Opened(parse(plain), Protection.PASSWORD, key, null, source, null);
+            Opened o = new Opened(parse(plain), Protection.PASSWORD, key, null, source, null, backupMark(plain));
             key = null; // handed over
             return o;
         } finally {
@@ -229,12 +234,12 @@ final class AccountStore
             File backup = SecretStore.backup(file, old.source(), old.isLegacy() ? ".v1.bak" : ".v2.bak");
             key = SecretStore.PasswordKey.create(pass, SecretStore.DEFAULT_ITERATIONS);
             // save() checks that the file still holds what was read (also after the slow key derivation)
-            byte[] written = save(file, accounts, Protection.PASSWORD, key, old.source());
-            Opened o = new Opened(accounts, Protection.PASSWORD, key, backup, written, null);
+            byte[] written = save(file, accounts, null, Protection.PASSWORD, key, old.source());
+            Opened o = new Opened(accounts, Protection.PASSWORD, key, backup, written, null, null);
             key = null; // handed over
             return o;
         } catch (IOException e) {
-            return new Opened(accounts, Protection.PASSWORD, null, null, old.source(), e.getMessage());
+            return new Opened(accounts, Protection.PASSWORD, null, null, old.source(), e.getMessage(), null);
         } finally {
             if (key != null) {
                 key.destroy();
@@ -243,20 +248,31 @@ final class AccountStore
     }
 
 
+    /** Writes the accounts (atomically), without a backup mark. */
+    static byte[] save(File file, List<Account> accounts, Protection protection, SecretStore.PasswordKey key,
+                       byte[] expected)
+            throws IOException, GeneralSecurityException
+    {
+        return save(file, accounts, null, protection, key, expected);
+    }
+
+
     /**
      * Writes the accounts (atomically).
      *
+     * @param backupMark {@link Backup#fingerprint} of the services at the last backup, or null; it is encrypted
+     *        with the services
      * @param key the password key for {@link Protection#PASSWORD}, ignored otherwise
      * @param expected the file contents as last read or written, or null for a new file: if the file
      *        holds something else, another program changed it, and nothing is written
      * @return the new file contents, the expected contents of the next save
      * @throws IOException also if the file was changed by another program
      */
-    static byte[] save(File file, List<Account> accounts, Protection protection, SecretStore.PasswordKey key,
-                       byte[] expected)
+    static byte[] save(File file, List<Account> accounts, String backupMark, Protection protection,
+                       SecretStore.PasswordKey key, byte[] expected)
             throws IOException, GeneralSecurityException
     {
-        byte[] plain = serialize(accounts);
+        byte[] plain = serialize(accounts, backupMark);
         try {
             Properties p = new Properties();
             p.setProperty(PREFIX + "name", "accounts");
@@ -304,7 +320,16 @@ final class AccountStore
     /** The plain account list: a properties text in UTF-8. */
     static byte[] serialize(List<Account> accounts) throws IOException
     {
+        return serialize(accounts, null);
+    }
+
+
+    static byte[] serialize(List<Account> accounts, String backupMark) throws IOException
+    {
         Properties p = new Properties();
+        if (backupMark != null) {
+            p.setProperty(BACKUP_MARK, backupMark);
+        }
         p.setProperty("count", Integer.toString(accounts.size()));
         for (int i = 0; i < accounts.size(); i++) {
             Account a = accounts.get(i);
@@ -325,12 +350,7 @@ final class AccountStore
 
     static List<Account> parse(byte[] plain) throws IOException
     {
-        Properties p = new Properties();
-        try (Reader r = new InputStreamReader(new ByteArrayInputStream(plain), StandardCharsets.UTF_8)) {
-            p.load(r);
-        } catch (IllegalArgumentException e) {
-            throw new IOException("Account list is malformed: " + e.getMessage());
-        }
+        Properties p = load(plain);
         List<Account> list = new ArrayList<>();
         try {
             int count = Integer.parseInt(p.getProperty("count", "0").trim());
@@ -345,5 +365,25 @@ final class AccountStore
             throw new IOException("Account list is malformed: " + e.getMessage());
         }
         return list;
+    }
+
+
+    /** @return the backup mark in the plain account list, or null */
+    static String backupMark(byte[] plain) throws IOException
+    {
+        String mark = load(plain).getProperty(BACKUP_MARK);
+        return mark == null || mark.trim().isEmpty() ? null : mark.trim();
+    }
+
+
+    private static Properties load(byte[] plain) throws IOException
+    {
+        Properties p = new Properties();
+        try (Reader r = new InputStreamReader(new ByteArrayInputStream(plain), StandardCharsets.UTF_8)) {
+            p.load(r);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Account list is malformed: " + e.getMessage());
+        }
+        return p;
     }
 }
