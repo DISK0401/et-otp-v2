@@ -102,14 +102,18 @@ final class CaptureExclusion
         }
         // also the hidden windows: a dialog or a popup that is shown again keeps its affinity, and no event tells
         // when it is shown again. Some hidden windows of the system (input method) refuse it: only the visible count
-        java.util.List<Long> visible = ScreenCapture.ownWindows(true);
         java.util.List<Long> all = ScreenCapture.ownWindows(false);
         boolean ok = true;
         try (Arena arena = Arena.ofConfined()) {
-            MethodHandle set = handle(arena, "SetWindowDisplayAffinity", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
             int affinity = exclude ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE;
+            MemorySegment current = arena.allocate(JAVA_INT);
             for (long h : all) {
-                if ((int) set.invokeExact(MemorySegment.ofAddress(h), affinity) == 0 && visible.contains(h)) {
+                MemorySegment hwnd = MemorySegment.ofAddress(h);
+                // only where it differs: this runs every second, and most windows have it already
+                if ((int) getAffinity().invokeExact(hwnd, current) != 0 && current.get(JAVA_INT, 0) == affinity) {
+                    continue;
+                }
+                if ((int) setAffinity().invokeExact(hwnd, affinity) == 0 && ScreenCapture.isVisible(h)) {
                     ok = false;
                 }
             }
@@ -137,9 +141,8 @@ final class CaptureExclusion
     static int affinity(long hwnd)
     {
         try (Arena arena = Arena.ofConfined()) {
-            MethodHandle get = handle(arena, "GetWindowDisplayAffinity", FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
             MemorySegment out = arena.allocate(JAVA_INT);
-            if ((int) get.invokeExact(MemorySegment.ofAddress(hwnd), out) == 0) {
+            if ((int) getAffinity().invokeExact(MemorySegment.ofAddress(hwnd), out) == 0) {
                 return -1;
             }
             return out.get(JAVA_INT, 0);
@@ -149,9 +152,32 @@ final class CaptureExclusion
     }
 
 
-    private static MethodHandle handle(Arena arena, String name, FunctionDescriptor descriptor)
+    private static MethodHandle setAffinity;
+    private static MethodHandle getAffinity;
+
+
+    /** made once: making a downcall handle takes milliseconds, and the windows are checked every second. */
+    private static synchronized MethodHandle setAffinity()
     {
-        SymbolLookup user32 = SymbolLookup.libraryLookup("user32", arena);
+        if (setAffinity == null) {
+            setAffinity = handle("SetWindowDisplayAffinity", FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_INT));
+        }
+        return setAffinity;
+    }
+
+
+    private static synchronized MethodHandle getAffinity()
+    {
+        if (getAffinity == null) {
+            getAffinity = handle("GetWindowDisplayAffinity", FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
+        }
+        return getAffinity;
+    }
+
+
+    private static MethodHandle handle(String name, FunctionDescriptor descriptor)
+    {
+        SymbolLookup user32 = SymbolLookup.libraryLookup("user32", Arena.global());
         return Linker.nativeLinker().downcallHandle(user32.findOrThrow(name), descriptor);
     }
 

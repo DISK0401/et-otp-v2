@@ -135,7 +135,7 @@ final class ScreenCapture
             return list;
         }
         try (Arena arena = Arena.ofConfined()) {
-            Win32 w = new Win32(arena);
+            Win32 w = win32();
             int ownPid = (int) w.getCurrentProcessId.invokeExact();
             List<Long> handles = topLevelWindows(w, arena);
 
@@ -189,7 +189,7 @@ final class ScreenCapture
             return list;
         }
         try (Arena arena = Arena.ofConfined()) {
-            Win32 w = new Win32(arena);
+            Win32 w = win32();
             int ownPid = (int) w.getCurrentProcessId.invokeExact();
             MemorySegment pid = arena.allocate(JAVA_INT);
             for (long h : topLevelWindows(w, arena)) {
@@ -206,23 +206,49 @@ final class ScreenCapture
     }
 
 
-    private static List<Long> topLevelWindows(Win32 w, Arena arena) throws Throwable
+    /** the callback of EnumWindows, made once; it adds to {@link #collected} (guarded by the class lock). */
+    private static MemorySegment collectCallback;
+    private static List<Long> collected;
+
+
+    private static synchronized List<Long> topLevelWindows(Win32 w, Arena arena) throws Throwable
     {
+        if (collectCallback == null) {
+            // BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam); EnumWindows calls it on this thread
+            MethodHandle collect = MethodHandles.lookup().findStatic(ScreenCapture.class, "collect",
+                MethodType.methodType(int.class, MemorySegment.class, long.class));
+            collectCallback = Linker.nativeLinker().upcallStub(collect,
+                FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_LONG), Arena.global());
+        }
         List<Long> handles = new ArrayList<>();
-        // BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
-        MethodHandle collect = MethodHandles.lookup().findStatic(ScreenCapture.class, "collect",
-            MethodType.methodType(int.class, List.class, MemorySegment.class, long.class)).bindTo(handles);
-        MemorySegment callback = Linker.nativeLinker().upcallStub(collect,
-            FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_LONG), arena);
-        int ignored = (int) w.enumWindows.invokeExact(callback, 0L);
+        collected = handles;
+        try {
+            int ignored = (int) w.enumWindows.invokeExact(collectCallback, 0L);
+        } finally {
+            collected = null;
+        }
         return handles;
     }
 
 
-    @SuppressWarnings("unused") // called from native code
-    private static int collect(List<Long> handles, MemorySegment hwnd, long param)
+    /** @return true if the window is visible */
+    static boolean isVisible(long hwnd)
     {
-        handles.add(hwnd.address());
+        try {
+            return (int) win32().isWindowVisible.invokeExact(MemorySegment.ofAddress(hwnd)) != 0;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+
+    @SuppressWarnings("unused") // called from native code
+    private static int collect(MemorySegment hwnd, long param)
+    {
+        List<Long> handles = collected;
+        if (handles != null) {
+            handles.add(hwnd.address());
+        }
         return 1;
     }
 
@@ -288,7 +314,7 @@ final class ScreenCapture
             return false; // macOS: only the windows on the screen are listed
         }
         try (Arena arena = Arena.ofConfined()) {
-            return (int) new Win32(arena).isIconic.invokeExact(MemorySegment.ofAddress(t.hwnd)) != 0;
+            return (int) win32().isIconic.invokeExact(MemorySegment.ofAddress(t.hwnd)) != 0;
         } catch (Throwable e) {
             return false;
         }
@@ -306,7 +332,7 @@ final class ScreenCapture
             return;
         }
         try (Arena arena = Arena.ofConfined()) {
-            Win32 w = new Win32(arena);
+            Win32 w = win32();
             MemorySegment hwnd = MemorySegment.ofAddress(t.hwnd);
             if ((int) w.isIconic.invokeExact(hwnd) != 0) {
                 int ignored = (int) w.showWindow.invokeExact(hwnd, SW_RESTORE);
@@ -345,7 +371,7 @@ final class ScreenCapture
     private static BufferedImage captureWindow(long handle) throws Throwable
     {
         try (Arena arena = Arena.ofConfined()) {
-            Win32 w = new Win32(arena);
+            Win32 w = win32();
             MemorySegment hwnd = MemorySegment.ofAddress(handle);
             if ((int) w.isIconic.invokeExact(hwnd) != 0) {
                 return null;
@@ -397,6 +423,22 @@ final class ScreenCapture
                 int ignored = (int) w.releaseDC.invokeExact(MemorySegment.NULL, screen);
             }
         }
+    }
+
+
+    private static Win32 win32;
+
+
+    /**
+     * @return the downcall handles, made once: making them takes milliseconds, and the windows are listed every
+     *         second while they are kept out of captures
+     */
+    private static synchronized Win32 win32()
+    {
+        if (win32 == null) {
+            win32 = new Win32(Arena.global());
+        }
+        return win32;
     }
 
 
