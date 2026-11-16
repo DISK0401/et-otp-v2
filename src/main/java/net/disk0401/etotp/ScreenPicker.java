@@ -128,7 +128,7 @@ final class ScreenPicker
         windowGrid.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(section(msg.get("picker.displays")));
         body.add(displayGrid);
-        if (ScreenCapture.windowsSupported()) {
+        if (ScreenCapture.windowListSupported()) {
             body.add(javax.swing.Box.createVerticalStrut(16));
             body.add(section(msg.get("picker.windows")));
             body.add(windowGrid);

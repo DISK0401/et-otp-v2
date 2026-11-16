@@ -35,9 +35,9 @@ import java.util.concurrent.TimeoutException;
 
 
 /**
- * Lists and captures the screens and, on Windows, the application windows, to read QR codes from them.
- * Windows are captured with PrintWindow (FFM API), so a window hidden behind others can be read.
- * Captured images are only kept in memory.
+ * Lists and captures the screens and, on Windows and macOS 14 or later, the application windows, to read QR codes
+ * from them. Windows are captured with PrintWindow (FFM API) on Windows and with ScreenCaptureKit on macOS
+ * ({@link MacWindows}), so a window hidden behind others can be read. Captured images are only kept in memory.
  */
 final class ScreenCapture
 {
@@ -48,15 +48,23 @@ final class ScreenCapture
         final int display;
         final String title;
         final GraphicsDevice device;
-        /** HWND of a window, 0 for a display. */
+        /** HWND of a window (CGWindowID on macOS), 0 for a display. */
         final long hwnd;
+        /** process of a window on macOS, 0 otherwise. */
+        final long pid;
 
         private Target(int display, String title, GraphicsDevice device, long hwnd)
+        {
+            this(display, title, device, hwnd, 0);
+        }
+
+        private Target(int display, String title, GraphicsDevice device, long hwnd, long pid)
         {
             this.display = display;
             this.title = title;
             this.device = device;
             this.hwnd = hwnd;
+            this.pid = pid;
         }
 
         boolean isDisplay()
@@ -82,6 +90,8 @@ final class ScreenCapture
      * while {@link #MAX_HANGING} of them hang.
      */
     private static final int MAX_HANGING = 4;
+    /** macOS: how long to wait for the list of the windows */
+    private static final long MAC_LIST_MILLIS = 3000;
     private static final java.util.concurrent.atomic.AtomicInteger HANGING = new java.util.concurrent.atomic.AtomicInteger();
     private static final java.util.Set<Long> TIMED_OUT = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
@@ -93,6 +103,13 @@ final class ScreenCapture
     static boolean windowsSupported()
     {
         return Dpapi.isAvailable();
+    }
+
+
+    /** @return true if the application windows can be listed and captured (Windows, macOS 14 or later) */
+    static boolean windowListSupported()
+    {
+        return windowsSupported() || MacWindows.isAvailable();
     }
 
 
@@ -112,6 +129,9 @@ final class ScreenCapture
     {
         List<Target> list = new ArrayList<>();
         if (!windowsSupported()) {
+            for (MacWindows.Info i : MacWindows.list(MAC_LIST_MILLIS)) {
+                list.add(new Target(0, i.title(), null, i.id(), i.pid()));
+            }
             return list;
         }
         try (Arena arena = Arena.ofConfined()) {
@@ -222,6 +242,10 @@ final class ScreenCapture
                 return null;
             }
         }
+        if (!windowsSupported()) {
+            // ScreenCaptureKit answers asynchronously: no thread waits for a capture that does not end
+            return MacWindows.capture(t.hwnd, millis);
+        }
         if (TIMED_OUT.contains(t.hwnd) || HANGING.get() >= MAX_HANGING) {
             return null;
         }
@@ -260,8 +284,8 @@ final class ScreenCapture
 
     static boolean isMinimized(Target t)
     {
-        if (t.isDisplay()) {
-            return false;
+        if (t.isDisplay() || !windowsSupported()) {
+            return false; // macOS: only the windows on the screen are listed
         }
         try (Arena arena = Arena.ofConfined()) {
             return (int) new Win32(arena).isIconic.invokeExact(MemorySegment.ofAddress(t.hwnd)) != 0;
@@ -275,6 +299,10 @@ final class ScreenCapture
     static void bringToFront(Target t)
     {
         if (t.isDisplay()) {
+            return;
+        }
+        if (!windowsSupported()) {
+            MacWindows.activate(t.pid);
             return;
         }
         try (Arena arena = Arena.ofConfined()) {
