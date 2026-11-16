@@ -200,10 +200,17 @@ final class UiSettings
     }
 
 
-    /** @return true to keep the windows out of screen sharing and captures (default false) */
+    /** @return true to keep the windows out of screen sharing and captures (default true) */
     boolean captureExcluded()
     {
-        return "true".equalsIgnoreCase(props.getProperty(CAPTURE_EXCLUDED, "false").trim());
+        return !"false".equalsIgnoreCase(props.getProperty(CAPTURE_EXCLUDED, "true").trim());
+    }
+
+
+    /** @return true if the user turned the exclusion from captures on (not only the default) */
+    boolean captureExcludedChosen()
+    {
+        return "true".equalsIgnoreCase(props.getProperty(CAPTURE_EXCLUDED, "").trim());
     }
 
 

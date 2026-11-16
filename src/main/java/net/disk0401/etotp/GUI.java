@@ -1833,7 +1833,8 @@ public class GUI implements AccountRow.Actions
 
     /**
      * Excludes the windows from captures if this is set (nothing to do otherwise: they are included by default).
-     * If it fails, the status line tells it once, as the windows can be seen in a screen sharing.
+     * If it fails, the status line tells it once, as the windows can be seen in a screen sharing; not if it is only
+     * on by default, so older versions of Windows do not show an error at every start.
      */
     private void applyCaptureExclusion()
     {
@@ -1841,7 +1842,7 @@ public class GUI implements AccountRow.Actions
             return;
         }
         boolean ok = CaptureExclusion.isSupported() && CaptureExclusion.apply(true);
-        if (!ok && !captureFailureShown && statusLabel != null) {
+        if (!ok && !captureFailureShown && statusLabel != null && uiSettings.captureExcludedChosen()) {
             setStatus(msg.get("display.capture.failed"), true);
         }
         captureFailureShown = !ok;
