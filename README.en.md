@@ -26,7 +26,7 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 - The window opens where it was when the program was last closed.
 - With password protection, the services are locked again after a time without use, and when the computer is locked or sleeps. et-OTP-v2 > Lock (Ctrl+L) locks at once.
 - Type part of a name into the search field to show only those services; choose one with the up and down keys and press Enter to copy its code. The edit menu changes the order of the services.
-- The codes can be hidden as "••• •••" against screen sharing and onlookers; they can still be copied. On Windows, the windows of et-OTP-v2 are left out of screen sharing and screenshots (this can be turned off).
+- The codes can be hidden as "••• •••" against screen sharing and onlookers; they can still be copied. On Windows and macOS 27 or later, the windows of et-OTP-v2 are left out of screen sharing and screenshots (this can be turned off).
 - Started with `--code <name>`, it writes the code without opening the window, for batch files and scripts.
 
 ## Requirements
