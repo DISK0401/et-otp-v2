@@ -68,6 +68,14 @@ final class MacWindows
     private MacWindows() { }
 
 
+    /** @return true for the 64 bit ARM processors of Apple (else Intel, x86_64) */
+    static boolean isArm(String osArch)
+    {
+        String a = osArch.toLowerCase(Locale.ROOT);
+        return a.equals("aarch64") || a.equals("arm64");
+    }
+
+
     /** @return true on macOS where ScreenCaptureKit can capture single windows (macOS 14 and later) */
     static synchronized boolean isAvailable()
     {
@@ -232,6 +240,11 @@ final class MacWindows
             try {
                 return f.get(millis, TimeUnit.MILLISECONDS);
             } catch (TimeoutException | ExecutionException e) {
+                // a late answer (for example after the permission dialog) finds the request cancelled and releases
+                // the content in complete(); if it came just now, the content is released here
+                if (!f.cancel(false)) {
+                    n.release(f.getNow(null));
+                }
                 return null;
             }
         }
@@ -323,13 +336,17 @@ final class MacWindows
             SymbolLookup.libraryLookup("/System/Library/Frameworks/ScreenCaptureKit.framework/ScreenCaptureKit", arena);
             SymbolLookup.libraryLookup("/System/Library/Frameworks/AppKit.framework/AppKit", arena);
             MemorySegment msgSend = objc.findOrThrow("objc_msgSend");
+            // a CGRect (32 bytes) is returned in memory: on x86_64 by objc_msgSend_stret, whose hidden result
+            // pointer comes first as in the C convention the descriptor gives; on arm64 objc_msgSend does it (x8)
+            MemorySegment msgSendStruct = isArm(System.getProperty("os.arch", ""))
+                ? msgSend : objc.findOrThrow("objc_msgSend_stret");
             getClass = LINKER.downcallHandle(objc.findOrThrow("objc_getClass"), FunctionDescriptor.of(ADDRESS, ADDRESS));
             registerName = LINKER.downcallHandle(objc.findOrThrow("sel_registerName"), FunctionDescriptor.of(ADDRESS, ADDRESS));
             // one handle for each signature: on arm64, objc_msgSend must not be called as a variadic function
             sendId = LINKER.downcallHandle(msgSend, FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
             sendLong = LINKER.downcallHandle(msgSend, FunctionDescriptor.of(JAVA_LONG, ADDRESS, ADDRESS));
             sendInt = LINKER.downcallHandle(msgSend, FunctionDescriptor.of(JAVA_INT, ADDRESS, ADDRESS));
-            sendRect = LINKER.downcallHandle(msgSend, FunctionDescriptor.of(CG_RECT, ADDRESS, ADDRESS));
+            sendRect = LINKER.downcallHandle(msgSendStruct, FunctionDescriptor.of(CG_RECT, ADDRESS, ADDRESS));
             sendFloat = LINKER.downcallHandle(msgSend, FunctionDescriptor.of(JAVA_FLOAT, ADDRESS, ADDRESS));
             sendIdLong = LINKER.downcallHandle(msgSend, FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, JAVA_LONG));
             sendIdInt = LINKER.downcallHandle(msgSend, FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, JAVA_INT));

@@ -47,4 +47,14 @@ class CaptureExclusionTest
         assertFalse(CaptureExclusion.isSupportedMacVersion("unknown"));
         assertFalse(CaptureExclusion.isSupportedMacVersion(".1"));
     }
+
+    /** On Intel Macs a CGRect is returned by objc_msgSend_stret, on Apple silicon by objc_msgSend. */
+    @Test
+    void appleSiliconIsKnownByTheArchitecture()
+    {
+        assertTrue(MacWindows.isArm("aarch64"));
+        assertTrue(MacWindows.isArm("arm64"));
+        assertFalse(MacWindows.isArm("x86_64"));
+        assertFalse(MacWindows.isArm("amd64"));
+    }
 }

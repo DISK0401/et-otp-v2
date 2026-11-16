@@ -83,7 +83,8 @@ final class ScreenPicker
     private Tile selected;
     /** true once the user selected a tile; then the automatic selection no longer changes it. */
     private boolean userSelected;
-    private SwingWorker<Void, Object[]> worker;
+    /** lists the windows, then captures the screens and windows; one at a time. */
+    private SwingWorker<?, ?> worker;
     /**
      * counts the loads; results of an older load (refresh) or after closing are ignored, as a
      * finished worker cannot be cancelled and its callbacks may still be waiting for the EDT.
@@ -200,14 +201,48 @@ final class ScreenPicker
         userSelected = false;
         read.setEnabled(false);
 
-        List<Tile> order = new ArrayList<>();
         for (ScreenCapture.Target t : ScreenCapture.displays()) {
             Tile tile = new Tile(t, msg.format("picker.display", t.display));
             displayGrid.add(tile);
             tiles.add(tile);
         }
+        displayGrid.revalidate();
+        dialog.getContentPane().repaint();
+        progress.setText(msg.format("picker.progress", 0, tiles.size()));
+        // listing the windows can take seconds on macOS (ScreenCaptureKit, a permission dialog): not on the EDT
+        SwingWorker<List<ScreenCapture.Target>, Void> lister = new SwingWorker<>() {
+            @Override
+            protected List<ScreenCapture.Target> doInBackground()
+            {
+                return ScreenCapture.windows();
+            }
+
+            @Override
+            protected void done()
+            {
+                if (gen != generation || isCancelled()) {
+                    return;
+                }
+                List<ScreenCapture.Target> windows;
+                try {
+                    windows = get();
+                } catch (InterruptedException | java.util.concurrent.ExecutionException e) {
+                    windows = Collections.emptyList();
+                }
+                capture(gen, windows);
+            }
+        };
+        worker = lister;
+        lister.execute();
+    }
+
+
+    /** Shows the windows and captures the screens and windows one after the other in the background. */
+    private void capture(int gen, List<ScreenCapture.Target> windows)
+    {
+        List<Tile> order = new ArrayList<>();
         List<Tile> windowTiles = new ArrayList<>();
-        for (ScreenCapture.Target t : ScreenCapture.windows()) {
+        for (ScreenCapture.Target t : windows) {
             Tile tile = new Tile(t, t.title);
             windowGrid.add(tile);
             tiles.add(tile);
@@ -225,7 +260,7 @@ final class ScreenPicker
         dialog.getContentPane().repaint();
 
         int total = order.size();
-        worker = new SwingWorker<Void, Object[]>() {
+        SwingWorker<Void, Object[]> capturer = new SwingWorker<Void, Object[]>() {
             @Override
             protected Void doInBackground()
             {
@@ -274,7 +309,8 @@ final class ScreenPicker
             }
         };
         progress.setText(msg.format("picker.progress", 0, total));
-        worker.execute();
+        worker = capturer;
+        capturer.execute();
     }
 
 
