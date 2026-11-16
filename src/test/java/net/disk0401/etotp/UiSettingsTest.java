@@ -64,6 +64,26 @@ class UiSettingsTest
         assertEquals(1, tmp.list().length);
     }
 
+    /** et-otp-v2 issue #24: hiding the codes is off by default, leaving out of captures is on. */
+    @Test
+    void displaySettingsSurviveSaveAndLoad() throws Exception
+    {
+        File f = new File(tmp, UiSettings.FILE_NAME);
+        UiSettings s = UiSettings.load(f);
+        org.junit.jupiter.api.Assertions.assertFalse(s.codesHidden());
+        org.junit.jupiter.api.Assertions.assertTrue(s.captureExcluded());
+        org.junit.jupiter.api.Assertions.assertFalse(s.captureExcludedChosen());
+        s.setCodesHidden(true);
+        s.setCaptureExcluded(false);
+        s.save();
+
+        UiSettings loaded = UiSettings.load(f);
+        org.junit.jupiter.api.Assertions.assertTrue(loaded.codesHidden());
+        org.junit.jupiter.api.Assertions.assertFalse(loaded.captureExcluded());
+        loaded.setCaptureExcluded(true);
+        org.junit.jupiter.api.Assertions.assertTrue(loaded.captureExcludedChosen());
+    }
+
     /** et-otp-v2 issue #18: the reminder to make a backup is on by default and can be turned off. */
     @Test
     void backupReminderCanBeTurnedOff() throws Exception

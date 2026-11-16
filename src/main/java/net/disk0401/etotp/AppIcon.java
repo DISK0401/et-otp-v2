@@ -34,6 +34,8 @@ final class AppIcon
 {
     static final Color ACCENT = new Color(0x00695C);
     private static final int[] SIZES = {16, 24, 32, 48, 64, 128, 256};
+    /** the size of the icon in the Dock of macOS (512 for Retina displays) */
+    private static final int DOCK_SIZE = 512;
 
 
     private AppIcon() { }
@@ -72,6 +74,23 @@ final class AppIcon
             list.add(draw(size));
         }
         return list;
+    }
+
+
+    /**
+     * Shows the icon in the Dock of macOS, where the icon of a window is not used and the Dock shows the icon of
+     * the java command otherwise. Nothing is done where the task bar has no application icon (Windows, Linux).
+     */
+    static void setTaskbarIcon()
+    {
+        try {
+            if (java.awt.Taskbar.isTaskbarSupported()
+                && java.awt.Taskbar.getTaskbar().isSupported(java.awt.Taskbar.Feature.ICON_IMAGE)) {
+                java.awt.Taskbar.getTaskbar().setIconImage(draw(DOCK_SIZE));
+            }
+        } catch (RuntimeException e) {
+            // only the look: the icon of the java command stays
+        }
     }
 
 

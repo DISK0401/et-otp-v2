@@ -26,6 +26,10 @@ import java.util.concurrent.TimeUnit;
  * Tells when the Windows session is locked (Windows+L, the lock screen, switching the user or a remote
  * session that is disconnected), with the FFM API and no library: a message-only window registered with
  * WTSRegisterSessionNotification receives WM_WTSSESSION_CHANGE on its own thread (et-otp-v2 issue #22).
+ * <p>
+ * On macOS, the session of CoreGraphics ({@code CGSessionCopyCurrentDictionary}) is checked every second: the
+ * screen is locked when it has {@code CGSSessionScreenIsLocked}, and another user has the screen when
+ * {@code kCGSSessionOnConsoleKey} is false (fast user switching), like a disconnected session on Windows.
  */
 final class SessionWatcher
 {
@@ -41,9 +45,17 @@ final class SessionWatcher
     private static volatile MethodHandle defWindowProc;
     private static volatile MethodHandle postMessage;
     private static volatile MemorySegment window;
+    private static volatile boolean macWatching;
 
 
     private SessionWatcher() { }
+
+
+    /** @return true if a locked session can be told here (Windows, macOS) */
+    static boolean isSupported()
+    {
+        return Dpapi.isAvailable() || Mac.isMac();
+    }
 
 
     /**
@@ -55,11 +67,11 @@ final class SessionWatcher
     static synchronized boolean start(Runnable listener)
     {
         onLock = listener;
-        if (window != null) {
+        if (window != null || macWatching) {
             return true;
         }
         if (!Dpapi.isAvailable()) {
-            return false;
+            return macWatching = Mac.start();
         }
         CountDownLatch ready = new CountDownLatch(1);
         boolean[] ok = new boolean[1];
@@ -166,6 +178,149 @@ final class SessionWatcher
             return (long) defWindowProc.invokeExact(hwnd, message, wParam, lParam);
         } catch (Throwable t) {
             return 0;
+        }
+    }
+
+
+    /** The macOS part: polls the session of CoreGraphics on its own thread. */
+    static final class Mac
+    {
+        private static final long POLL_MILLIS = 1000;
+        private static final int UTF8 = 0x08000100; // kCFStringEncodingUTF8
+
+        private static MethodHandle copySession;
+        private static MethodHandle getValue;
+        private static MethodHandle typeOf;
+        private static MethodHandle release;
+        private static MethodHandle booleanValue;
+        private static MethodHandle numberValue;
+        private static long booleanType;
+        private static long numberType;
+        private static MemorySegment keyLocked;
+        private static MemorySegment keyOnConsole;
+
+
+        private Mac() { }
+
+
+        static boolean isMac()
+        {
+            return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).startsWith("mac");
+        }
+
+
+        static boolean start()
+        {
+            if (!isMac()) {
+                return false;
+            }
+            try {
+                init();
+                if (locked() == null) {
+                    return false; // no session of the window server
+                }
+            } catch (Throwable t) {
+                return false;
+            }
+            Thread t = new Thread(Mac::run, "session-watcher");
+            t.setDaemon(true);
+            t.start();
+            return true;
+        }
+
+
+        private static void run()
+        {
+            boolean wasLocked = false;
+            while (true) {
+                Boolean locked = locked();
+                if (locked != null) {
+                    if (locked && !wasLocked) {
+                        Runnable r = onLock;
+                        if (r != null) {
+                            r.run();
+                        }
+                    }
+                    wasLocked = locked;
+                }
+                try {
+                    Thread.sleep(POLL_MILLIS);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        }
+
+
+        private static void init() throws Throwable
+        {
+            Linker linker = Linker.nativeLinker();
+            Arena arena = Arena.global();
+            SymbolLookup cg = SymbolLookup.libraryLookup("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", arena);
+            SymbolLookup cf = SymbolLookup.libraryLookup("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", arena);
+            copySession = linker.downcallHandle(cg.findOrThrow("CGSessionCopyCurrentDictionary"), FunctionDescriptor.of(ADDRESS));
+            getValue = linker.downcallHandle(cf.findOrThrow("CFDictionaryGetValue"), FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS));
+            typeOf = linker.downcallHandle(cf.findOrThrow("CFGetTypeID"), FunctionDescriptor.of(JAVA_LONG, ADDRESS));
+            release = linker.downcallHandle(cf.findOrThrow("CFRelease"), FunctionDescriptor.ofVoid(ADDRESS));
+            booleanValue = linker.downcallHandle(cf.findOrThrow("CFBooleanGetValue"),
+                                                 FunctionDescriptor.of(java.lang.foreign.ValueLayout.JAVA_BOOLEAN, ADDRESS));
+            numberValue = linker.downcallHandle(cf.findOrThrow("CFNumberGetValue"),
+                FunctionDescriptor.of(java.lang.foreign.ValueLayout.JAVA_BOOLEAN, ADDRESS, JAVA_LONG, ADDRESS));
+            booleanType = (long) linker.downcallHandle(cf.findOrThrow("CFBooleanGetTypeID"), FunctionDescriptor.of(JAVA_LONG))
+                                       .invokeExact();
+            numberType = (long) linker.downcallHandle(cf.findOrThrow("CFNumberGetTypeID"), FunctionDescriptor.of(JAVA_LONG))
+                                      .invokeExact();
+            MethodHandle createString = linker.downcallHandle(cf.findOrThrow("CFStringCreateWithCString"),
+                FunctionDescriptor.of(ADDRESS, ADDRESS, ADDRESS, JAVA_INT));
+            // kept for the whole run of the program
+            keyLocked = (MemorySegment) createString.invokeExact(MemorySegment.NULL,
+                                                                 arena.allocateFrom("CGSSessionScreenIsLocked"), UTF8);
+            keyOnConsole = (MemorySegment) createString.invokeExact(MemorySegment.NULL,
+                                                                    arena.allocateFrom("kCGSSessionOnConsoleKey"), UTF8);
+        }
+
+
+        /** @return true if the screen is locked or another user has it, or null if unknown */
+        private static Boolean locked()
+        {
+            try {
+                MemorySegment session = (MemorySegment) copySession.invokeExact();
+                if (session.equals(MemorySegment.NULL)) {
+                    return null;
+                }
+                try {
+                    Boolean screenLocked = truth((MemorySegment) getValue.invokeExact(session, keyLocked));
+                    Boolean onConsole = truth((MemorySegment) getValue.invokeExact(session, keyOnConsole));
+                    return Boolean.TRUE.equals(screenLocked) || Boolean.FALSE.equals(onConsole);
+                } finally {
+                    release.invokeExact(session);
+                }
+            } catch (Throwable t) {
+                return null;
+            }
+        }
+
+
+        /** @return the value of a CFBoolean or CFNumber, or null if it is missing or something else */
+        private static Boolean truth(MemorySegment value) throws Throwable
+        {
+            if (value.equals(MemorySegment.NULL)) {
+                return null;
+            }
+            long type = (long) typeOf.invokeExact(value);
+            if (type == booleanType) {
+                return (boolean) booleanValue.invokeExact(value);
+            }
+            if (type == numberType) {
+                try (Arena arena = Arena.ofConfined()) {
+                    MemorySegment out = arena.allocate(JAVA_LONG);
+                    // kCFNumberSInt64Type
+                    if ((boolean) numberValue.invokeExact(value, 4L, out)) {
+                        return out.get(JAVA_LONG, 0) != 0;
+                    }
+                }
+            }
+            return null;
         }
     }
 }
