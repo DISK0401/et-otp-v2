@@ -132,6 +132,13 @@ class AutoLockTest
     }
 
     @Test
+    @EnabledOnOs({OS.WINDOWS, OS.MAC})
+    void aLockedSessionCanBeToldOnWindowsAndMacOs()
+    {
+        assertTrue(SessionWatcher.isSupported());
+    }
+
+    @Test
     @EnabledOnOs(OS.WINDOWS)
     void aLockedWindowsSessionIsReported() throws Exception
     {
