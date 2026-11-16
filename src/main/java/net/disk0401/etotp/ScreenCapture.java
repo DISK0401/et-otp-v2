@@ -117,13 +117,7 @@ final class ScreenCapture
         try (Arena arena = Arena.ofConfined()) {
             Win32 w = new Win32(arena);
             int ownPid = (int) w.getCurrentProcessId.invokeExact();
-            List<Long> handles = new ArrayList<>();
-            // BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
-            MethodHandle collect = MethodHandles.lookup().findStatic(ScreenCapture.class, "collect",
-                MethodType.methodType(int.class, List.class, MemorySegment.class, long.class)).bindTo(handles);
-            MemorySegment callback = Linker.nativeLinker().upcallStub(collect,
-                FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_LONG), arena);
-            int ignored = (int) w.enumWindows.invokeExact(callback, 0L);
+            List<Long> handles = topLevelWindows(w, arena);
 
             MemorySegment pid = arena.allocate(JAVA_INT);
             MemorySegment cloaked = arena.allocate(JAVA_INT);
@@ -161,6 +155,47 @@ final class ScreenCapture
             // listing windows is an extra; the displays still work
         }
         return list;
+    }
+
+
+    /**
+     * @param visibleOnly true for the visible windows only
+     * @return the top level windows (HWND) of this program, also its dialogs and popup windows; empty if not on Windows
+     */
+    static List<Long> ownWindows(boolean visibleOnly)
+    {
+        List<Long> list = new ArrayList<>();
+        if (!windowsSupported()) {
+            return list;
+        }
+        try (Arena arena = Arena.ofConfined()) {
+            Win32 w = new Win32(arena);
+            int ownPid = (int) w.getCurrentProcessId.invokeExact();
+            MemorySegment pid = arena.allocate(JAVA_INT);
+            for (long h : topLevelWindows(w, arena)) {
+                MemorySegment hwnd = MemorySegment.ofAddress(h);
+                int tid = (int) w.getWindowThreadProcessId.invokeExact(hwnd, pid);
+                if (pid.get(JAVA_INT, 0) == ownPid && (!visibleOnly || (int) w.isWindowVisible.invokeExact(hwnd) != 0)) {
+                    list.add(h);
+                }
+            }
+        } catch (Throwable t) {
+            // then nothing is found
+        }
+        return list;
+    }
+
+
+    private static List<Long> topLevelWindows(Win32 w, Arena arena) throws Throwable
+    {
+        List<Long> handles = new ArrayList<>();
+        // BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam)
+        MethodHandle collect = MethodHandles.lookup().findStatic(ScreenCapture.class, "collect",
+            MethodType.methodType(int.class, List.class, MemorySegment.class, long.class)).bindTo(handles);
+        MemorySegment callback = Linker.nativeLinker().upcallStub(collect,
+            FunctionDescriptor.of(JAVA_INT, ADDRESS, JAVA_LONG), arena);
+        int ignored = (int) w.enumWindows.invokeExact(callback, 0L);
+        return handles;
     }
 
 

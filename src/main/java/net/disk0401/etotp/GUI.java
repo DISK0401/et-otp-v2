@@ -185,6 +185,8 @@ public class GUI implements AccountRow.Actions
     private JMenuItem restoreItem;
     /** under the list: services were added or deleted after the last backup. */
     private JTextArea backupHint;
+    /** the failure to exclude the windows from captures was shown, until it works again. */
+    private boolean captureFailureShown;
 
     private JDialog settingsDialog;
     private JDialog aboutDialog;
@@ -241,6 +243,13 @@ public class GUI implements AccountRow.Actions
         Toolkit.getDefaultToolkit().addAWTEventListener(e -> gui.autoLock.input(System.currentTimeMillis()),
             AWTEvent.KEY_EVENT_MASK | AWTEvent.MOUSE_EVENT_MASK | AWTEvent.MOUSE_MOTION_EVENT_MASK
             | AWTEvent.MOUSE_WHEEL_EVENT_MASK);
+        // a new window (a dialog, a menu outside the window) is excluded from captures as soon as it is shown
+        Toolkit.getDefaultToolkit().addAWTEventListener(e -> {
+            if (e.getID() == java.awt.event.WindowEvent.WINDOW_OPENED) {
+                gui.applyCaptureExclusion();
+            }
+        }, AWTEvent.WINDOW_EVENT_MASK);
+        gui.applyCaptureExclusion();
         SessionWatcher.start(() -> SwingUtilities.invokeLater(() -> {
             if (gui.uiSettings.lockOnSystemLock()) {
                 gui.requestLock();
@@ -1260,6 +1269,7 @@ public class GUI implements AccountRow.Actions
         }
         for (Account a : accounts) {
             AccountRow row = new AccountRow(a, msg, this);
+            row.setCodesHidden(uiSettings.codesHidden());
             row.setAlignmentX(Component.LEFT_ALIGNMENT);
             row.setBackground(listPanel.getBackground());
             rows.add(row);
@@ -1283,6 +1293,7 @@ public class GUI implements AccountRow.Actions
             requestLock();
         }
         updateLockItem(); // the protection may have changed in the settings
+        applyCaptureExclusion(); // also windows shown without an event, for example a tool tip outside the window
         long now = millis / 1000;
         for (AccountRow row : rows) {
             row.update(now);
@@ -1818,6 +1829,85 @@ public class GUI implements AccountRow.Actions
     }
 
 
+    // --- display (issue #24) ---
+
+    /**
+     * Excludes the windows from captures if this is set (nothing to do otherwise: they are included by default).
+     * If it fails, the status line tells it once, as the windows can be seen in a screen sharing.
+     */
+    private void applyCaptureExclusion()
+    {
+        if (!uiSettings.captureExcluded()) {
+            return;
+        }
+        boolean ok = CaptureExclusion.isSupported() && CaptureExclusion.apply(true);
+        if (!ok && !captureFailureShown && statusLabel != null) {
+            setStatus(msg.get("display.capture.failed"), true);
+        }
+        captureFailureShown = !ok;
+    }
+
+
+    private JPanel buildDisplayTab()
+    {
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = 0;
+        c.weightx = 1;
+        c.fill = GridBagConstraints.HORIZONTAL;
+        c.anchor = GridBagConstraints.NORTHWEST;
+        c.insets = new Insets(2, 0, 2, 0);
+
+        JCheckBox hide = new JCheckBox(msg.get("display.hide"), uiSettings.codesHidden());
+        hide.addActionListener(e -> {
+            uiSettings.setCodesHidden(hide.isSelected());
+            saveUiSettings();
+            for (AccountRow row : rows) {
+                row.setCodesHidden(hide.isSelected());
+            }
+        });
+        panel.add(hide, c);
+        panel.add(SetupWizard.note(msg.format("display.hide.note", AccountRow.REVEAL_MILLIS / 1000)), c);
+
+        // only where it works; the setting is not shown on other systems
+        if (CaptureExclusion.isSupported()) {
+            JCheckBox capture = new JCheckBox(msg.get("display.capture"), uiSettings.captureExcluded());
+            capture.addActionListener(e -> {
+                boolean on = capture.isSelected();
+                if (!CaptureExclusion.apply(on) && on) {
+                    CaptureExclusion.apply(false);
+                    capture.setSelected(false);
+                    JOptionPane.showMessageDialog(settingsDialog, msg.get("display.capture.failed"),
+                                                  settingsDialog.getTitle(), JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+                uiSettings.setCaptureExcluded(on);
+                saveUiSettings();
+            });
+            c.insets = new Insets(10, 0, 2, 0);
+            panel.add(capture, c);
+            c.insets = new Insets(2, 0, 2, 0);
+            panel.add(SetupWizard.note(msg.get("display.capture.note")), c);
+        }
+
+        c.weighty = 1;
+        panel.add(new JPanel(), c);
+        return panel;
+    }
+
+
+    private void saveUiSettings()
+    {
+        try {
+            uiSettings.save();
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(settingsDialog, msg.format("error.uiSettings", ex.getMessage()),
+                                          settingsDialog.getTitle(), JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+
     // --- backup (issue #18) ---
 
     /** @return true while the services can be exported or changed: open, and no lock requested */
@@ -2345,6 +2435,7 @@ public class GUI implements AccountRow.Actions
         tabs.setEnabledAt(0, opened);
         tabs.addTab(msg.get("settings.tab.general"), buildGeneralTab());
         tabs.addTab(msg.get("settings.tab.lock"), buildLockTab());
+        tabs.addTab(msg.get("settings.tab.display"), buildDisplayTab());
         dia.getContentPane().add(tabs);
         packWrapped(dia);
         return dia;

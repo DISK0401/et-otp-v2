@@ -31,6 +31,8 @@ final class UiSettings
     private static final String LOCK_SYSTEM = "lock.onSystemLock";
     private static final String LOCK_MINIMIZE = "lock.onMinimize";
     private static final String BACKUP_REMINDER = "backup.reminder";
+    private static final String CODES_HIDDEN = "codes.hidden";
+    private static final String CAPTURE_EXCLUDED = "capture.excluded";
 
     private final File file;
     private final Properties props;
@@ -180,6 +182,34 @@ final class UiSettings
     void setBackupReminder(boolean on)
     {
         props.setProperty(BACKUP_REMINDER, Boolean.toString(on));
+    }
+
+
+    // --- display (issue #24) ---
+
+    /** @return true to hide the codes until the mouse is on the row or "Show" is pressed (default false) */
+    boolean codesHidden()
+    {
+        return "true".equalsIgnoreCase(props.getProperty(CODES_HIDDEN, "false").trim());
+    }
+
+
+    void setCodesHidden(boolean on)
+    {
+        props.setProperty(CODES_HIDDEN, Boolean.toString(on));
+    }
+
+
+    /** @return true to keep the windows out of screen sharing and captures (default false) */
+    boolean captureExcluded()
+    {
+        return "true".equalsIgnoreCase(props.getProperty(CAPTURE_EXCLUDED, "false").trim());
+    }
+
+
+    void setCaptureExcluded(boolean on)
+    {
+        props.setProperty(CAPTURE_EXCLUDED, Boolean.toString(on));
     }
 
 
