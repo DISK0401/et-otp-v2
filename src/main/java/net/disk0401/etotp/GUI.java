@@ -853,6 +853,7 @@ public class GUI implements AccountRow.Actions
     {
         frame = new JFrame(PROGNAME);
         frame.setIconImages(AppIcon.images());
+        AppIcon.setTaskbarIcon(); // macOS: the Dock does not use the icon of the window
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 
         JMenuBar mb = new JMenuBar();
