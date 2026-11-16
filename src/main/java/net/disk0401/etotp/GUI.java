@@ -2083,6 +2083,12 @@ public class GUI implements AccountRow.Actions
     private File chooseBackupFile(boolean save)
     {
         JFileChooser chooser = new JFileChooser();
+        // macOS: Swing starts in the home folder (Windows: in Documents already); Documents is where users look.
+        // The dialog of Swing is kept, as the one of the system shows English: the java command has no localization
+        File documents = new File(System.getProperty("user.home"), "Documents");
+        if (CaptureExclusion.isMac(System.getProperty("os.name", "")) && documents.isDirectory()) {
+            chooser.setCurrentDirectory(documents);
+        }
         chooser.setDialogTitle(msg.get(save ? "backup.title" : "restore.title"));
         FileNameExtensionFilter filter = new FileNameExtensionFilter(msg.get("backup.fileType"),
                                                                      Backup.EXTENSION.substring(1));
