@@ -2373,7 +2373,7 @@ public class GUI implements AccountRow.Actions
         idleRow.add(spinner);
         idleRow.add(Box.createHorizontalStrut(6));
         idleRow.add(unit);
-        JCheckBox system = new JCheckBox(msg.get(Dpapi.isAvailable() ? "lock.system" : "lock.sleep"),
+        JCheckBox system = new JCheckBox(msg.get(SessionWatcher.isSupported() ? "lock.system" : "lock.sleep"),
                                          uiSettings.lockOnSystemLock());
         JCheckBox minimize = new JCheckBox(msg.get("lock.minimize"), uiSettings.lockOnMinimize());
         String shortcut = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx() == InputEvent.META_DOWN_MASK
