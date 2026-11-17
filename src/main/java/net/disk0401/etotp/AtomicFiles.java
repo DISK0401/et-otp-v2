@@ -64,10 +64,13 @@ final class AtomicFiles
     }
 
 
-    /** Writes the bytes to a temporary file in the same directory and then replaces the target. */
+    /**
+     * Writes the bytes to a temporary file in the same directory and then replaces the target. If the target is
+     * a symbolic link, the file it points to is replaced, not the link (et-otp-v2 issue #35).
+     */
     static void write(byte[] content, File file) throws IOException
     {
-        Path target = file.getAbsoluteFile().toPath();
+        Path target = followLinks(file.getAbsoluteFile().toPath());
         Path dir = target.getParent();
         Path tmp = Files.createTempFile(dir, ".et-otp", ".tmp");
         try {
@@ -84,6 +87,30 @@ final class AtomicFiles
             Files.deleteIfExists(tmp);
         }
         syncDirectory(dir);
+    }
+
+
+    /** The maximum number of symbolic links followed, as {@code MAXSYMLINKS} of Linux. */
+    static final int MAX_LINKS = 40;
+
+
+    /**
+     * Returns the file that the path points to after following symbolic links. Unlike
+     * {@link Path#toRealPath}, the file need not exist: a link to a file that does not exist yet gives that file.
+     *
+     * @throws java.nio.file.FileSystemException if there are more than {@link #MAX_LINKS} links, for example a loop
+     */
+    static Path followLinks(Path path) throws IOException
+    {
+        Path p = path;
+        for (int i = 0; i < MAX_LINKS && Files.isSymbolicLink(p); i++) {
+            // a relative link is relative to the folder of the link
+            p = p.resolveSibling(Files.readSymbolicLink(p));
+        }
+        if (Files.isSymbolicLink(p)) {
+            throw new java.nio.file.FileSystemException(path.toString(), null, "Too many levels of symbolic links");
+        }
+        return p;
     }
 
 
