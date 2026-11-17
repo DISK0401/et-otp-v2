@@ -280,7 +280,7 @@ public class GUI implements AccountRow.Actions
     }
 
 
-    /** @return the lock of {@code <config>.lock}, or null if another instance holds it */
+    /** @return the lock of {@code <config>.lock} (see {@link #lockFile}), or null if another instance holds it */
     private static FileLock tryLock(File config) throws IOException
     {
         FileChannel ch = FileChannel.open(lockFile(config).toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -300,9 +300,13 @@ public class GUI implements AccountRow.Actions
     }
 
 
-    private static File lockFile(File config)
+    /**
+     * Next to the file that is written: a link to the configuration file and the file itself give the same lock
+     * (et-otp-v2 issue #35).
+     */
+    private static File lockFile(File config) throws IOException
     {
-        return new File(config.getAbsolutePath() + ".lock");
+        return new File(AtomicFiles.followLinks(config.getAbsoluteFile().toPath()) + ".lock");
     }
 
 
