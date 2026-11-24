@@ -28,6 +28,9 @@ import javax.swing.event.PopupMenuListener;
 
 /**
  * One registered service in the list: name, current code, next code and the remaining time.
+ * <p>
+ * The codes can be hidden (et-otp-v2 issue #24): they are then shown only while the mouse is on the row, or for
+ * a few seconds after "Show" was pressed. They can be copied while hidden.
  */
 final class AccountRow extends JPanel
 {
@@ -66,6 +69,11 @@ final class AccountRow extends JPanel
         UP, DOWN, TOP
     }
 
+    /** how long "Show" shows the hidden codes. */
+    static final int REVEAL_MILLIS = 5000;
+    /** shown for each digit of a hidden code. */
+    static final char MASK = '\u2022';
+
     private final Account account;
     private final Messages msg;
     private final JLabel nameLabel = new JLabel();
@@ -76,7 +84,14 @@ final class AccountRow extends JPanel
     private final TimeBar timeBar;
     private long shownCounter = Long.MIN_VALUE;
     private String code = "";
+    private String next = "";
     private final JButton editButton;
+    private final JButton showButton;
+    private boolean codesHidden;
+    private boolean hovered;
+    /** the hidden codes are shown until this time (milliseconds), after "Show" was pressed. */
+    private long revealUntil;
+    private final javax.swing.Timer revealEnd;
 
 
     AccountRow(Account account, Messages msg, Actions actions, boolean showIcon)
@@ -111,6 +126,16 @@ final class AccountRow extends JPanel
         nextLabel.setForeground(Color.GRAY);
         timeBar = new TimeBar(account.period());
 
+        showButton = new JButton(msg.get("row.show"));
+        showButton.setToolTipText(msg.get("row.showTip"));
+        showButton.setVisible(false);
+        revealEnd = new javax.swing.Timer(REVEAL_MILLIS, e -> showCodes());
+        revealEnd.setRepeats(false);
+        showButton.addActionListener(e -> {
+            revealUntil = System.currentTimeMillis() + REVEAL_MILLIS;
+            revealEnd.restart();
+            showCodes();
+        });
         JButton copy = new JButton(msg.get("row.copy"));
         copy.addActionListener(e -> actions.copy(account, code));
         JButton edit = new JButton(msg.get("row.edit"));
@@ -200,22 +225,41 @@ final class AccountRow extends JPanel
         c.weightx = 0;
         c.anchor = GridBagConstraints.CENTER;
         c.insets = new Insets(0, 8, 0, 0);
-        add(copy, c);
+        add(showButton, c);
         c.gridx = first + 3;
+        add(copy, c);
+        c.gridx = first + 4;
         add(edit, c);
 
         c.gridx = 0;
         c.gridy = 2;
-        c.gridwidth = first + 4;
+        c.gridwidth = first + 5;
         c.gridheight = 1;
         c.fill = GridBagConstraints.HORIZONTAL;
         c.insets = new Insets(6, 0, 0, 0);
         add(timeBar, c);
 
+        // the hidden codes are shown while the mouse is anywhere on the row, also on its buttons
+        MouseAdapter hover = new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e)
+            {
+                setHovered(true);
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e)
+            {
+                // moving onto a child of the row leaves the parent
+                setHovered(getMousePosition(true) != null);
+            }
+        };
+        addMouseListener(hover);
         for (java.awt.Component child : getComponents()) {
             if (child instanceof JComponent) {
                 ((JComponent) child).setInheritsPopupMenu(true);
             }
+            child.addMouseListener(hover);
         }
         refreshName();
         refreshIcon();
@@ -292,10 +336,65 @@ final class AccountRow extends JPanel
         if (counter != shownCounter) {
             shownCounter = counter;
             code = account.code(now);
-            codeLabel.setText(group(code));
-            nextLabel.setText(msg.format("row.next", group(account.totp(counter + 1))));
+            next = account.totp(counter + 1);
         }
+        showCodes();
         timeBar.setValue(account.secondsLeft(now));
+    }
+
+
+    /** Hides the codes (or shows them again); the remaining time is always shown. */
+    void setCodesHidden(boolean hidden)
+    {
+        codesHidden = hidden;
+        revealUntil = 0;
+        revealEnd.stop();
+        showButton.setVisible(hidden);
+        showCodes();
+    }
+
+
+    /** @return true if the codes are readable now */
+    boolean codesShown()
+    {
+        return !codesHidden || hovered || System.currentTimeMillis() < revealUntil;
+    }
+
+
+    private void setHovered(boolean on)
+    {
+        if (hovered != on) {
+            hovered = on;
+            showCodes();
+        }
+    }
+
+
+    private void showCodes()
+    {
+        boolean shown = codesShown();
+        setText(codeLabel, group(code), mask(code), shown);
+        setText(nextLabel, msg.format("row.next", group(next)), msg.format("row.next", mask(next)), shown);
+    }
+
+
+    /** Shows one of the texts; the label is as wide as the wider one, so the row does not move when it changes. */
+    private static void setText(JLabel label, String text, String hidden, boolean shown)
+    {
+        label.setText(shown ? text : hidden);
+        label.setPreferredSize(null);
+        java.awt.FontMetrics fm = label.getFontMetrics(label.getFont());
+        java.awt.Insets in = label.getInsets();
+        java.awt.Dimension size = label.getPreferredSize();
+        size.width = Math.max(fm.stringWidth(text), fm.stringWidth(hidden)) + in.left + in.right;
+        label.setPreferredSize(size);
+    }
+
+
+    /** @return the code hidden: a dot for each digit, in the same groups */
+    static String mask(String code)
+    {
+        return group(String.valueOf(MASK).repeat(code.length()));
     }
 
 

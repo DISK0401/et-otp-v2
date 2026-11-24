@@ -32,6 +32,8 @@ final class UiSettings
     private static final String LOCK_MINIMIZE = "lock.onMinimize";
     private static final String BACKUP_REMINDER = "backup.reminder";
     private static final String SHOW_ICONS = "list.showIcons";
+    private static final String CODES_HIDDEN = "codes.hidden";
+    private static final String CAPTURE_EXCLUDED = "capture.excluded";
 
     private final File file;
     private final Properties props;
@@ -194,6 +196,41 @@ final class UiSettings
     void setShowIcons(boolean on)
     {
         props.setProperty(SHOW_ICONS, Boolean.toString(on));
+    }
+
+
+    // --- display (issue #24) ---
+
+    /** @return true to hide the codes until the mouse is on the row or "Show" is pressed (default false) */
+    boolean codesHidden()
+    {
+        return "true".equalsIgnoreCase(props.getProperty(CODES_HIDDEN, "false").trim());
+    }
+
+
+    void setCodesHidden(boolean on)
+    {
+        props.setProperty(CODES_HIDDEN, Boolean.toString(on));
+    }
+
+
+    /** @return true to keep the windows out of screen sharing and captures (default true) */
+    boolean captureExcluded()
+    {
+        return !"false".equalsIgnoreCase(props.getProperty(CAPTURE_EXCLUDED, "true").trim());
+    }
+
+
+    /** @return true if the user turned the exclusion from captures on (not only the default) */
+    boolean captureExcludedChosen()
+    {
+        return "true".equalsIgnoreCase(props.getProperty(CAPTURE_EXCLUDED, "").trim());
+    }
+
+
+    void setCaptureExcluded(boolean on)
+    {
+        props.setProperty(CAPTURE_EXCLUDED, Boolean.toString(on));
     }
 
 

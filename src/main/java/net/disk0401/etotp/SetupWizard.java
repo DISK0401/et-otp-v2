@@ -317,8 +317,9 @@ final class SetupWizard extends JDialog
     /** A short explanation under a choice, indented like the choice's text. */
     static JLabel note(String text)
     {
-        JLabel label = new JLabel("<html><body style=\"width: " + (TEXT_WIDTH - 24) + "px\">" + GUI.html(text)
-                                  + "</body></html>");
+        // a line break in the text ("\n" in the messages) starts a new line
+        JLabel label = new JLabel("<html><body style=\"width: " + (TEXT_WIDTH - 24) + "px\">"
+                                  + GUI.html(text).replace("\n", "<br>") + "</body></html>");
         label.setBorder(BorderFactory.createEmptyBorder(0, 24, 8, 0));
         label.setForeground(Color.DARK_GRAY);
         return label;

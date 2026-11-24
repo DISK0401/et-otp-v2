@@ -27,6 +27,7 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 - The window opens where it was when the program was last closed.
 - With password protection, the services are locked again after a time without use, and when the computer is locked or sleeps. et-OTP-v2 > Lock (Ctrl+L) locks at once.
 - Type part of a name into the search field to show only those services; choose one with the up and down keys and press Enter to copy its code. The edit menu changes the order of the services.
+- The codes can be hidden as "••• •••" against screen sharing and onlookers; they can still be copied. On Windows and macOS 27 or later, the windows of et-OTP-v2 are left out of screen sharing and screenshots (this can be turned off).
 - Started with `--code <name>`, it writes the code without opening the window, for batch files and scripts.
 
 ## Requirements
@@ -100,7 +101,7 @@ The list shows an icon left of each service, chosen in this order:
 
 An icon is fetched from a site only when you choose "Fetch icon from the site...", check the site shown and press Fetch; et-otp-v2 never connects at any other time. It asks the site of the service directly over HTTPS and uses no third-party icon service. No cookies are sent, the top page is only read from the site itself, redirects are followed at most three times, and an icon the site keeps on another server (such as a CDN) is fetched from there, but never from an IP address or a server with a local network name. The proxy settings of the operating system are used, and the certificate authorities trusted by the operating system (the Windows certificate store, the macOS keychains) are trusted besides those of Java, so that fetching also works in company networks that inspect HTTPS. The site of well-known services is filled in; for other services, enter the address of the site where you use the service. The domain of an e-mail address in the account name is never used.
 
-The image is scaled to a 64 x 64 PNG and stored with the service in the encrypted configuration file (and in backups), never in an unencrypted cache. PNG, JPEG, GIF, BMP and ICO images can be used; SVG and WebP icons of sites are not supported. The icons can be turned off on the General tab of the settings.
+The image is scaled to a 64 x 64 PNG and stored with the service in the encrypted configuration file (and in backups), never in an unencrypted cache. PNG, JPEG, GIF, BMP and ICO images can be used; SVG and WebP icons of sites are not supported. The icons can be turned off on the Display tab of the settings.
 
 ## Backup and restore
 
