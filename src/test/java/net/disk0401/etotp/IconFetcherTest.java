@@ -210,4 +210,24 @@ class IconFetcherTest
         assertThrows(IconFetcher.Problem.class,
                      () -> IconFetcher.read(new Endless(), 1000, true, System.nanoTime() - 1), "no time left");
     }
+
+    /** The icon may be on a CDN, but never on a server of the local network. */
+    @Test
+    void iconsMayComeFromPublicServers()
+    {
+        IconFetcher f = new IconFetcher("slack.com");
+        assertTrue(f.allowedIcon(URI.create("https://a.slack-edge.com/img/ico/favicon.ico")));
+        assertTrue(f.allowedIcon(URI.create("https://slack.com/favicon.ico")));
+        assertFalse(f.allowed(URI.create("https://a.slack-edge.com/img/ico/favicon.ico")), "not for the page");
+        assertFalse(f.allowedIcon(URI.create("http://a.slack-edge.com/favicon.ico")));
+        assertFalse(f.allowedIcon(URI.create("https://cdn.example.net:8443/favicon.ico")));
+        assertFalse(f.allowedIcon(URI.create("https://user@cdn.example.net/favicon.ico")));
+        for (String local : new String[] { "https://192.168.1.1/x.png", "https://127.1/x.png", "https://[::1]/x.png",
+                                           "https://intranet/x.png", "https://localhost/x.png",
+                                           "https://printer.local/x.png", "https://nas.home.arpa/x.png" }) {
+            assertFalse(f.allowedIcon(URI.create(local)), local);
+        }
+        // the site itself may be in the local network: the user entered it
+        assertTrue(new IconFetcher("intranet").allowedIcon(URI.create("https://intranet/favicon.ico")));
+    }
 }

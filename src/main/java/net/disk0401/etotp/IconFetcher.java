@@ -48,7 +48,8 @@ import javax.net.ssl.X509ExtendedTrustManager;
  * <p>
  * The site is asked directly (no third party icon service, which would learn the registered services):
  * the top page for its {@code <link rel="icon">} and {@code apple-touch-icon}, else {@code /favicon.ico}.
- * Only HTTPS is used, no cookies are sent, redirects are followed only within the site, and every
+ * Only HTTPS is used, no cookies are sent, the top page is only read from the site itself (also after
+ * redirects), the icon may also come from another server the site names (a CDN, as for Slack), and every
  * response has a time and size limit. The proxy settings of the operating system are used if
  * {@code java.net.useSystemProxies} was set at the start ({@link GUI#main}), and the certificates trusted by
  * the operating system are trusted besides those of Java: a company network that inspects HTTPS usually adds
@@ -193,6 +194,43 @@ final class IconFetcher
     }
 
 
+    /**
+     * @return true if an icon may be requested there: within the site ({@link #allowed}), or on another server
+     *         that the site names for its icon (a CDN), if it is a public host name on the HTTPS port. IP
+     *         addresses and host names without a dot are refused, so a page cannot make this computer request
+     *         something from a server in its own network.
+     */
+    boolean allowedIcon(URI uri)
+    {
+        if (allowed(uri)) {
+            return true;
+        }
+        if (uri == null || !"https".equalsIgnoreCase(uri.getScheme()) || uri.getRawUserInfo() != null
+            || (uri.getPort() != -1 && uri.getPort() != 443)) {
+            return false;
+        }
+        return publicHostName(uri.getHost());
+    }
+
+
+    /** @return true for a host name with a dot that is not an IP address, "localhost" or a local name */
+    static boolean publicHostName(String host)
+    {
+        if (host == null) {
+            return false;
+        }
+        String h = host.toLowerCase(Locale.ROOT);
+        if (h.endsWith(".")) {
+            h = h.substring(0, h.length() - 1);
+        }
+        if (h.startsWith("[") || h.matches("[0-9.]+") || !h.contains(".")) {
+            return false; // IPv6, IPv4 (also short forms such as 127.1), single label
+        }
+        return !(h.equals("localhost") || h.endsWith(".localhost") || h.endsWith(".local")
+                 || h.endsWith(".internal") || h.endsWith(".lan") || h.endsWith(".home.arpa"));
+    }
+
+
     /** An icon link of a page. */
     static final class Link
     {
@@ -333,11 +371,11 @@ final class IconFetcher
         IOException problem = null;
         URI favicon = home.resolve("/favicon.ico");
         try {
-            Response page = get(home, MAX_HTML_BYTES, true);
+            Response page = get(home, MAX_HTML_BYTES, true, false);
             favicon = page.uri.resolve("/favicon.ico");
             String html = new String(page.body, StandardCharsets.ISO_8859_1);
             for (Link l : iconLinks(html, page.uri)) {
-                if (allowed(l.uri) && !candidates.contains(l.uri) && candidates.size() < MAX_CANDIDATES) {
+                if (allowedIcon(l.uri) && !candidates.contains(l.uri) && candidates.size() < MAX_CANDIDATES) {
                     candidates.add(l.uri);
                 }
             }
@@ -349,7 +387,7 @@ final class IconFetcher
         }
         for (URI uri : candidates) {
             try {
-                return IconImages.toStored(get(uri, IconImages.MAX_FILE_BYTES, false).body);
+                return IconImages.toStored(get(uri, IconImages.MAX_FILE_BYTES, false, true).body);
             } catch (IOException e) {
                 // an icon on another server tells the user more than a missing favicon
                 if (!(problem instanceof Problem && ((Problem) problem).kind == Problem.Kind.OUTSIDE)) {
@@ -549,11 +587,12 @@ final class IconFetcher
     }
 
 
-    private Response get(URI uri, int maxBytes, boolean truncate) throws IOException, InterruptedException
+    /** @param icon true for an icon, which may also be on another server ({@link #allowedIcon}) */
+    private Response get(URI uri, int maxBytes, boolean truncate, boolean icon) throws IOException, InterruptedException
     {
         URI current = uri;
         for (int redirects = 0;; redirects++) {
-            if (!allowed(current)) {
+            if (!(icon ? allowedIcon(current) : allowed(current))) {
                 throw new Problem(Problem.Kind.OUTSIDE, current.getHost(),
                                   "Not fetched (outside the site or not HTTPS): " + current);
             }
