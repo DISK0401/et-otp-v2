@@ -274,9 +274,15 @@ Write release notes in Markdown with exactly two top-level sections, in this ord
 ## 日本語
 
 Start each section with one or two sentences that say what this release is about. Then group
-the changes under these headings (Japanese in parentheses) and omit empty groups:
-"### Important" (重要), "### New features" (新機能), "### Security" (セキュリティ),
-"### Improvements" (改善), "### Bug fixes" (不具合の修正), "### Dependencies" (依存関係).
+the changes under these headings, in this order, and omit empty groups:
+
+- English: "### Important", "### New features", "### Security", "### Improvements",
+  "### Bug fixes", "### Dependencies"
+- 日本語: "### 重要", "### 新機能", "### セキュリティ", "### 改善", "### 不具合の修正",
+  "### 依存関係" (only the Japanese words, without the English ones)
+
+Write in each group only what the material says. Do not add cases or conditions of your own, for
+example when a change does not apply.
 
 Grouping:
 - "Bug fixes" are only changes of behaviour that users had in ${prev:-an earlier release}.
