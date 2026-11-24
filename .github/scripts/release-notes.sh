@@ -274,15 +274,25 @@ Write release notes in Markdown with exactly two top-level sections, in this ord
 ## 日本語
 
 Start each section with one or two sentences that say what this release is about. Then group
-the changes under these headings (Japanese in parentheses) and omit empty groups:
-"### Important" (重要), "### New features" (新機能), "### Security" (セキュリティ),
-"### Improvements" (改善), "### Bug fixes" (不具合の修正), "### Dependencies" (依存関係).
+the changes under these headings, in this order, and omit empty groups:
+
+- English: "### Important", "### New features", "### Security", "### Improvements",
+  "### Bug fixes", "### Dependencies"
+- 日本語: "### 重要", "### 新機能", "### セキュリティ", "### 改善", "### 不具合の修正",
+  "### 依存関係" (only the Japanese words, without the English ones)
+
+Write in each group only what the material says. Do not add cases or conditions of your own, for
+example when a change does not apply.
 
 Grouping:
 - "Bug fixes" are only changes of behaviour that users had in ${prev:-an earlier release}.
 - A feature added in this release and then corrected in this release (for example "Fix problems
   found in the review", a crash or a speed-up of the new code) is one new feature or improvement.
   Describe its final state; do not list these corrections, and never under "Bug fixes".
+- Pull requests and commits also tell the problems found and fixed while the release was made:
+  timings, crashes, slowness, error messages or checks of code that is new in this release.
+  Users never had these problems. Leave them out completely, in any group. Before you write a
+  bullet about a fix or a speed-up, check that the behaviour it changes was in ${prev:-an earlier release}.
 - Something that did not work on a platform in the previous release (for example a feature that
   worked on Windows but not on macOS) is a bug fix, not a new feature.
 
@@ -298,6 +308,8 @@ Content:
   English text, in Japanese the Japanese text of the same key, exactly as in the list (without
   "..." and without "&"). Do not translate them yourself. Keys marked with "*" are new or
   changed in this release.
+- Leave out how a change is implemented: names of APIs, classes, threads or libraries that users
+  do not see, unless users need them (for example a required version of the operating system).
 - Leave out changes that do not affect users: CI, release workflow, tests, code refactoring,
   build plugin updates. Mention dependency updates only if users notice them (for example the
   bundled Java runtime), in one bullet.
