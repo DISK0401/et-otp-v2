@@ -31,6 +31,7 @@ final class UiSettings
     private static final String LOCK_SYSTEM = "lock.onSystemLock";
     private static final String LOCK_MINIMIZE = "lock.onMinimize";
     private static final String BACKUP_REMINDER = "backup.reminder";
+    private static final String SHOW_ICONS = "list.showIcons";
 
     private final File file;
     private final Properties props;
@@ -180,6 +181,19 @@ final class UiSettings
     void setBackupReminder(boolean on)
     {
         props.setProperty(BACKUP_REMINDER, Boolean.toString(on));
+    }
+
+
+    /** @return true to show the icons of the services (default) */
+    boolean showIcons()
+    {
+        return !"false".equalsIgnoreCase(props.getProperty(SHOW_ICONS, "true").trim());
+    }
+
+
+    void setShowIcons(boolean on)
+    {
+        props.setProperty(SHOW_ICONS, Boolean.toString(on));
     }
 
 
