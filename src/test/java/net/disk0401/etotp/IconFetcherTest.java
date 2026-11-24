@@ -7,9 +7,14 @@ package net.disk0401.etotp;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
+import java.util.concurrent.CountDownLatch;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -122,5 +127,87 @@ class IconFetcherTest
         assertEquals(List.of(), links("<link rel=\"icon\">", "https://example.com/"));
         assertEquals(List.of(), links("<link rel=\"icon\" href=\"::invalid uri::\">", "https://example.com/"));
         assertEquals(List.of(), links("<link href=\"/favicon.ico\">", "https://example.com/"));
+    }
+
+    @Test
+    void redirectsAreLimited() throws IOException
+    {
+        URI page = URI.create("https://example.com/a/b");
+        assertEquals(URI.create("https://www.example.com/"), IconFetcher.redirect(page, "https://www.example.com/", 0));
+        assertEquals(URI.create("https://example.com/a/c"), IconFetcher.redirect(page, " c ", 2));
+        IconFetcher.Problem tooMany = assertThrows(IconFetcher.Problem.class,
+                                                   () -> IconFetcher.redirect(page, "/x", IconFetcher.MAX_REDIRECTS));
+        assertEquals(IconFetcher.Problem.Kind.REDIRECTS, tooMany.kind);
+        assertThrows(IconFetcher.Problem.class, () -> IconFetcher.redirect(page, null, 0));
+        assertThrows(IconFetcher.Problem.class, () -> IconFetcher.redirect(page, "", 0));
+        assertThrows(IconFetcher.Problem.class, () -> IconFetcher.redirect(page, "::not a uri::", 0));
+        // a redirect to another server or to http is followed by nothing: the next request is not allowed
+        IconFetcher f = new IconFetcher("example.com");
+        assertFalse(f.allowed(IconFetcher.redirect(page, "https://cdn.example.net/favicon.ico", 0)));
+        assertFalse(f.allowed(IconFetcher.redirect(page, "http://example.com/favicon.ico", 0)));
+    }
+
+    /** Never ends, as a site that sends without end. */
+    private static final class Endless extends InputStream
+    {
+        @Override
+        public int read()
+        {
+            return 'x';
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len)
+        {
+            java.util.Arrays.fill(b, off, off + len, (byte) 'x');
+            return len;
+        }
+    }
+
+    private static long seconds(int s)
+    {
+        return System.nanoTime() + s * 1_000_000_000L;
+    }
+
+    @Test
+    void largeAnswersAreLimited() throws IOException
+    {
+        assertEquals(1000, IconFetcher.read(new Endless(), 1000, true, seconds(10)).length, "the start of a page");
+        IconFetcher.Problem p = assertThrows(IconFetcher.Problem.class,
+                                             () -> IconFetcher.read(new Endless(), 1000, false, seconds(10)));
+        assertEquals(IconFetcher.Problem.Kind.TOO_LARGE, p.kind);
+        assertEquals(3, IconFetcher.read(new ByteArrayInputStream(new byte[3]), 1000, false, seconds(10)).length);
+    }
+
+    /** A site that stops sending: the stream is closed at the deadline, and reading ends. */
+    @Test
+    void stalledAnswersEndAtTheDeadline()
+    {
+        CountDownLatch closed = new CountDownLatch(1);
+        InputStream stalled = new InputStream() {
+            @Override
+            public int read() throws IOException
+            {
+                try {
+                    closed.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                throw new IOException("closed");
+            }
+
+            @Override
+            public void close()
+            {
+                closed.countDown();
+            }
+        };
+        long start = System.nanoTime();
+        IconFetcher.Problem p = assertThrows(IconFetcher.Problem.class,
+                                             () -> IconFetcher.read(stalled, 1000, false, System.nanoTime() + 300_000_000L));
+        assertEquals(IconFetcher.Problem.Kind.TIMEOUT, p.kind);
+        assertTrue(System.nanoTime() - start < 5_000_000_000L);
+        assertThrows(IconFetcher.Problem.class,
+                     () -> IconFetcher.read(new Endless(), 1000, true, System.nanoTime() - 1), "no time left");
     }
 }

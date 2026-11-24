@@ -1553,6 +1553,7 @@ public class GUI implements AccountRow.Actions
             protected void done()
             {
                 setBusy(false);
+                setStatus(null, false); // also if the result is dropped (the service was deleted or locked)
                 try {
                     String icon = get();
                     if (setIcon(account, icon, site)) {
@@ -1561,10 +1562,46 @@ public class GUI implements AccountRow.Actions
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (ExecutionException e) {
-                    setStatus(msg.format("status.iconNotFetched", site, reason(e)), true);
+                    setStatus(msg.format("status.iconNotFetched", site, fetchProblem(e.getCause())), true);
                 }
             }
         }.execute();
+    }
+
+
+    /** @return why the icon could not be fetched, for the user */
+    private String fetchProblem(Throwable cause)
+    {
+        if (cause instanceof IconFetcher.Problem) {
+            IconFetcher.Problem p = (IconFetcher.Problem) cause;
+            switch (p.kind) {
+                case OUTSIDE:
+                    return msg.format("icon.error.outside", String.valueOf(p.detail));
+                case STATUS:
+                    return msg.format("icon.error.status", p.detail);
+                case TOO_LARGE:
+                    return msg.get("icon.error.tooLarge");
+                case TIMEOUT:
+                    return msg.get("icon.error.timeout");
+                default:
+                    return msg.get("icon.error.redirects");
+            }
+        }
+        if (cause instanceof java.net.http.HttpTimeoutException) {
+            return msg.get("icon.error.timeout");
+        }
+        if (cause instanceof javax.net.ssl.SSLException) {
+            return msg.format("icon.error.tls", cause.getMessage());
+        }
+        if (cause instanceof java.net.ConnectException || cause instanceof java.nio.channels.UnresolvedAddressException
+            || cause instanceof java.net.UnknownHostException) {
+            return msg.get("icon.error.connect");
+        }
+        if (cause instanceof IOException && cause.getMessage() != null
+            && cause.getMessage().startsWith("Unsupported or damaged image")) {
+            return msg.get("icon.error.image");
+        }
+        return reason(new ExecutionException(cause));
     }
 
 

@@ -351,7 +351,10 @@ final class IconFetcher
             try {
                 return IconImages.toStored(get(uri, IconImages.MAX_FILE_BYTES, false).body);
             } catch (IOException e) {
-                problem = e;
+                // an icon on another server tells the user more than a missing favicon
+                if (!(problem instanceof Problem && ((Problem) problem).kind == Problem.Kind.OUTSIDE)) {
+                    problem = e;
+                }
             }
         }
         throw problem != null ? problem : new IOException("No icon found");
@@ -497,12 +500,62 @@ final class IconFetcher
     /**
      * @param truncate true to read only the start of a longer body, false to fail if it is longer
      */
+    /** Why an icon was not fetched, told to the user in their language. */
+    static final class Problem extends IOException
+    {
+        private static final long serialVersionUID = 1L;
+
+        enum Kind
+        {
+            /** the icon or a redirect is on another server, or not on HTTPS. */
+            OUTSIDE,
+            REDIRECTS,
+            /** an HTTP status other than 200; the detail is the status. */
+            STATUS,
+            TOO_LARGE,
+            TIMEOUT
+        }
+
+        final Kind kind;
+        /** the host for {@link Kind#OUTSIDE}, the status for {@link Kind#STATUS}, else null. */
+        final String detail;
+
+        Problem(Kind kind, String detail, String message)
+        {
+            super(message);
+            this.kind = kind;
+            this.detail = detail;
+        }
+    }
+
+
+    /**
+     * Checks a redirect.
+     *
+     * @param redirects the redirects followed before this one
+     * @return the address to request next (checked with {@link #allowed} before the request)
+     * @throws IOException if it must not be followed
+     */
+    static URI redirect(URI current, String location, int redirects) throws IOException
+    {
+        if (redirects >= MAX_REDIRECTS) {
+            throw new Problem(Problem.Kind.REDIRECTS, null, "Too many redirects: " + current);
+        }
+        URI next = location == null || location.trim().isEmpty() ? null : resolve(current, location.trim());
+        if (next == null) {
+            throw new Problem(Problem.Kind.REDIRECTS, null, "Invalid redirect from " + current + ": " + location);
+        }
+        return next;
+    }
+
+
     private Response get(URI uri, int maxBytes, boolean truncate) throws IOException, InterruptedException
     {
         URI current = uri;
         for (int redirects = 0;; redirects++) {
             if (!allowed(current)) {
-                throw new IOException("Not fetched (outside the site or not HTTPS): " + current);
+                throw new Problem(Problem.Kind.OUTSIDE, current.getHost(),
+                                  "Not fetched (outside the site or not HTTPS): " + current);
             }
             HttpRequest request = HttpRequest.newBuilder(current)
                 .timeout(remaining(REQUEST_TIMEOUT))
@@ -514,21 +567,13 @@ final class IconFetcher
             int status = response.statusCode();
             try (InputStream in = response.body()) {
                 if (status >= 300 && status < 400) {
-                    String location = response.headers().firstValue("Location").orElse(null);
-                    if (location == null || redirects >= MAX_REDIRECTS) {
-                        throw new IOException("Too many redirects: " + current);
-                    }
-                    URI next = resolve(current, location.trim());
-                    if (next == null) {
-                        throw new IOException("Invalid redirect: " + location);
-                    }
-                    current = next;
+                    current = redirect(current, response.headers().firstValue("Location").orElse(null), redirects);
                     continue;
                 }
                 if (status != 200) {
-                    throw new IOException("HTTP " + status + ": " + current);
+                    throw new Problem(Problem.Kind.STATUS, Integer.toString(status), "HTTP " + status + ": " + current);
                 }
-                return new Response(current, read(in, maxBytes, truncate));
+                return new Response(current, read(in, maxBytes, truncate, deadline));
             }
         }
     }
@@ -544,12 +589,17 @@ final class IconFetcher
     }
 
 
-    /** Reads the body up to the limit; the stream is closed when the total time is over. */
-    private byte[] read(InputStream in, int maxBytes, boolean truncate) throws IOException
+    /**
+     * Reads the body up to the limit; the stream is closed when the time is over.
+     *
+     * @param truncate true to return the start of a longer body, false to fail
+     * @param deadline the end of the time in {@link System#nanoTime()}
+     */
+    static byte[] read(InputStream in, int maxBytes, boolean truncate, long deadline) throws IOException
     {
         long left = deadline - System.nanoTime();
         if (left <= 0) {
-            throw new IOException("Timed out");
+            throw new Problem(Problem.Kind.TIMEOUT, null, "Timed out");
         }
         ScheduledFuture<?> watchdog = WATCHDOG.schedule(() -> {
             try {
@@ -566,7 +616,10 @@ final class IconFetcher
                 try {
                     n = in.read(buffer);
                 } catch (IOException e) {
-                    throw System.nanoTime() >= deadline ? new IOException("Timed out", e) : e;
+                    if (System.nanoTime() >= deadline) {
+                        throw new Problem(Problem.Kind.TIMEOUT, null, "Timed out");
+                    }
+                    throw e;
                 }
                 if (n < 0) {
                     return out.toByteArray();
@@ -576,7 +629,8 @@ final class IconFetcher
                         out.write(buffer, 0, maxBytes - out.size());
                         return out.toByteArray();
                     }
-                    throw new IOException("The answer is too large (more than " + maxBytes + " bytes)");
+                    throw new Problem(Problem.Kind.TOO_LARGE, null,
+                                      "The answer is too large (more than " + maxBytes + " bytes)");
                 }
                 out.write(buffer, 0, n);
             }
