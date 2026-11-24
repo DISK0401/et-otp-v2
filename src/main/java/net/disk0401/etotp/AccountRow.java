@@ -49,7 +49,19 @@ final class AccountRow extends JPanel
         boolean canMove(Account account, Move where);
 
         void move(Account account, Move where);
+
+        /** Sets the icon from an image file chosen by the user. */
+        void chooseIcon(Account account);
+
+        /** Fetches the icon from the site of the service, after asking the user. */
+        void fetchIcon(Account account);
+
+        /** Removes the icon chosen or fetched; the bundled or the letter icon is shown again. */
+        void removeIcon(Account account);
     }
+
+    /** the size of the icons in the list. */
+    static final int ICON_SIZE = 32;
 
     /** Where the edit menu moves a service. */
     enum Move
@@ -65,6 +77,8 @@ final class AccountRow extends JPanel
     private final Account account;
     private final Messages msg;
     private final JLabel nameLabel = new JLabel();
+    /** the icon of the service, or null if icons are not shown. */
+    private final JLabel iconLabel;
     private final JLabel codeLabel = new JLabel();
     private final JLabel nextLabel = new JLabel();
     private final TimeBar timeBar;
@@ -80,11 +94,12 @@ final class AccountRow extends JPanel
     private final javax.swing.Timer revealEnd;
 
 
-    AccountRow(Account account, Messages msg, Actions actions)
+    AccountRow(Account account, Messages msg, Actions actions, boolean showIcon)
     {
         super(new GridBagLayout());
         this.account = account;
         this.msg = msg;
+        this.iconLabel = showIcon ? new JLabel() : null;
         setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createMatteBorder(0, 0, 1, 0, UIManager.getColor("Separator.foreground")),
             BorderFactory.createEmptyBorder(8, 10, 8, 10)));
@@ -132,6 +147,16 @@ final class AccountRow extends JPanel
         menu.add(rename);
         menu.add(delete);
         menu.addSeparator();
+        JMenuItem iconFile = new JMenuItem(msg.get("row.icon.file"));
+        iconFile.addActionListener(e -> actions.chooseIcon(account));
+        JMenuItem iconFetch = new JMenuItem(msg.get("row.icon.fetch"));
+        iconFetch.addActionListener(e -> actions.fetchIcon(account));
+        JMenuItem iconRemove = new JMenuItem(msg.get("row.icon.remove"));
+        iconRemove.addActionListener(e -> actions.removeIcon(account));
+        menu.add(iconFile);
+        menu.add(iconFetch);
+        menu.add(iconRemove);
+        menu.addSeparator();
         JMenuItem[] moves = new JMenuItem[Move.values().length];
         for (Move where : Move.values()) {
             JMenuItem item = new JMenuItem(msg.get("row.move." + where.name().toLowerCase(java.util.Locale.ROOT)));
@@ -146,6 +171,7 @@ final class AccountRow extends JPanel
                 for (Move where : Move.values()) {
                     moves[where.ordinal()].setEnabled(actions.canMove(account, where));
                 }
+                iconRemove.setEnabled(account.icon() != null);
             }
 
             @Override
@@ -160,9 +186,22 @@ final class AccountRow extends JPanel
         setComponentPopupMenu(menu);
 
         GridBagConstraints c = new GridBagConstraints();
-        c.gridx = 0;
+        // the icon, if shown, in a column of its own left of the name and the code
+        int first = 0;
+        if (iconLabel != null) {
+            c.gridx = 0;
+            c.gridy = 0;
+            c.gridheight = 2;
+            c.anchor = GridBagConstraints.CENTER;
+            c.insets = new Insets(0, 0, 0, 10);
+            add(iconLabel, c);
+            c.insets = new Insets(0, 0, 0, 0);
+            first = 1;
+        }
+        c.gridx = first;
         c.gridy = 0;
         c.gridwidth = 2;
+        c.gridheight = 1;
         c.weightx = 1;
         c.anchor = GridBagConstraints.WEST;
         c.fill = GridBagConstraints.HORIZONTAL;
@@ -174,27 +213,27 @@ final class AccountRow extends JPanel
         c.fill = GridBagConstraints.NONE;
         add(codeLabel, c);
 
-        c.gridx = 1;
+        c.gridx = first + 1;
         c.weightx = 1;
         c.anchor = GridBagConstraints.SOUTHWEST;
         c.insets = new Insets(0, 12, 6, 0);
         add(nextLabel, c);
 
-        c.gridx = 2;
+        c.gridx = first + 2;
         c.gridy = 0;
         c.gridheight = 2;
         c.weightx = 0;
         c.anchor = GridBagConstraints.CENTER;
         c.insets = new Insets(0, 8, 0, 0);
         add(showButton, c);
-        c.gridx = 3;
+        c.gridx = first + 3;
         add(copy, c);
-        c.gridx = 4;
+        c.gridx = first + 4;
         add(edit, c);
 
         c.gridx = 0;
         c.gridy = 2;
-        c.gridwidth = 5;
+        c.gridwidth = first + 5;
         c.gridheight = 1;
         c.fill = GridBagConstraints.HORIZONTAL;
         c.insets = new Insets(6, 0, 0, 0);
@@ -223,6 +262,7 @@ final class AccountRow extends JPanel
             child.addMouseListener(hover);
         }
         refreshName();
+        refreshIcon();
         update(System.currentTimeMillis() / 1000);
     }
 
@@ -277,6 +317,15 @@ final class AccountRow extends JPanel
     void refreshName()
     {
         nameLabel.setText(shownName());
+    }
+
+
+    /** Shows the icon again, after it was changed (or the name, which may choose another icon). */
+    void refreshIcon()
+    {
+        if (iconLabel != null) {
+            iconLabel.setIcon(ServiceIcons.icon(account, ICON_SIZE));
+        }
     }
 
 

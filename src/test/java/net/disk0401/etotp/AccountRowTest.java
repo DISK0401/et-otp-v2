@@ -37,13 +37,22 @@ class AccountRowTest
 
         @Override
         public void move(Account account, AccountRow.Move where) { }
+
+        @Override
+        public void chooseIcon(Account account) { }
+
+        @Override
+        public void fetchIcon(Account account) { }
+
+        @Override
+        public void removeIcon(Account account) { }
     };
 
     /** et-otp issue #1: the code must not change the size of the row when it changes. */
     @Test
     void sizeDoesNotChangeWithTheCode() throws Exception
     {
-        AccountRow row = new AccountRow(new Account("Example", "JBSWY3DPEHPK3PXP"), new Messages(Locale.ENGLISH), NONE);
+        AccountRow row = new AccountRow(new Account("Example", "JBSWY3DPEHPK3PXP"), new Messages(Locale.ENGLISH), NONE, true);
         row.update(0);
         Dimension first = row.getPreferredSize();
 
@@ -69,9 +78,15 @@ class AccountRowTest
             public boolean canMove(Account account, AccountRow.Move where) { return false; }
             @Override
             public void move(Account account, AccountRow.Move where) { }
+            @Override
+            public void chooseIcon(Account account) { }
+            @Override
+            public void fetchIcon(Account account) { }
+            @Override
+            public void removeIcon(Account account) { }
         };
         Account account = new Account("Example", "JBSWY3DPEHPK3PXP");
-        AccountRow row = new AccountRow(account, new Messages(Locale.ENGLISH), copy);
+        AccountRow row = new AccountRow(account, new Messages(Locale.ENGLISH), copy, true);
         row.update(0);
         String shownText = texts(row);
 

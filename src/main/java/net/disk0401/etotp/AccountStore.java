@@ -339,6 +339,16 @@ final class AccountStore
             p.setProperty(k + "algorithm", a.algorithm());
             p.setProperty(k + "digits", Integer.toString(a.digits()));
             p.setProperty(k + "period", Integer.toString(a.period()));
+            // since 2.4 (issue #27); older versions ignore these and drop them when they save
+            if (!a.issuer().isEmpty()) {
+                p.setProperty(k + "issuer", a.issuer());
+            }
+            if (a.icon() != null) {
+                p.setProperty(k + "icon", a.icon());
+            }
+            if (!a.site().isEmpty()) {
+                p.setProperty(k + "site", a.site());
+            }
         }
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         try (Writer w = new OutputStreamWriter(buf, StandardCharsets.UTF_8)) {
@@ -356,10 +366,15 @@ final class AccountStore
             int count = Integer.parseInt(p.getProperty("count", "0").trim());
             for (int i = 1; i <= count; i++) {
                 String k = "account." + i + ".";
-                list.add(new Account(p.getProperty(k + "name"), p.getProperty(k + "secret"),
-                                     p.getProperty(k + "algorithm", Account.SHA1),
-                                     Integer.parseInt(p.getProperty(k + "digits", "6").trim()),
-                                     Integer.parseInt(p.getProperty(k + "period", "30").trim())));
+                Account a = new Account(p.getProperty(k + "name"), p.getProperty(k + "secret"),
+                                        p.getProperty(k + "algorithm", Account.SHA1),
+                                        Integer.parseInt(p.getProperty(k + "digits", "6").trim()),
+                                        Integer.parseInt(p.getProperty(k + "period", "30").trim()));
+                a.setIssuer(p.getProperty(k + "issuer"));
+                // kept as text: the image is only decoded by the window, not for --code
+                a.setIcon(p.getProperty(k + "icon"));
+                a.setSite(p.getProperty(k + "site"));
+                list.add(a);
             }
         } catch (NumberFormatException | Account.InvalidException e) {
             throw new IOException("Account list is malformed: " + e.getMessage());

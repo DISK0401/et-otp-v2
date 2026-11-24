@@ -37,6 +37,7 @@
       <li>Holds any number of services. Click a code or press Copy to copy it to the clipboard.</li>
       <li>Registers a service by reading the QR code shown on the screen; on Windows also from a window behind other windows. A QR code image file or the key typed in also works.</li>
       <li>Stores the services encrypted. On Windows, choose between protection for your Windows user (no password) and a password; on macOS and Linux a password is used.</li>
+      <li>Shows an icon for each service: icons of well-known services are bundled, and an icon can be fetched from the site of a service when you ask for it.</li>
       <li>Exports the services to an encrypted file that can be restored on another computer.</li>
       <li>English and Japanese user interface.</li>
       <li>With password protection, locks again after a time without use or when the computer is locked.</li>
@@ -112,6 +113,19 @@ if not defined MFA_CODE exit /b 1</code></pre>
     <p>There is no way to give the password in an environment variable or as an argument: arguments can be seen by other programs, and environment variables can be read by other programs of the same user and are passed on to the programs started. <code>echo password | ...</code> works as well, but cmd starts the left side of the pipe as another cmd, whose command line, with the password, can be seen by other programs; the password also stays in the batch file or the command history. In cmd, <code>echo password | ...</code> also passes the space before the "|": write <code>echo password| ...</code> without the space.</p>
   </section>
 
+  <section id="icons">
+    <h2>Service icons</h2>
+    <p>The list shows an icon left of each service, chosen in this order:</p>
+    <ol>
+      <li>An image set with <b>Set icon from image file...</b> or fetched with <b>Fetch icon from the site...</b> in the <b>Edit</b> menu of the service (whichever was set last).</li>
+      <li>A bundled icon, found by the issuer in the QR code, or, without an issuer (for example for a key typed in), by the first words of the name.</li>
+      <li>The first letter of the name on a color derived from the name.</li>
+    </ol>
+    <p><b>Fetch icon from the site...</b> shows the site it will connect to. Only when you check it and press <b>Fetch</b> does et-otp-v2 connect directly to that site over HTTPS and fetch the icon named on its top page, or <code>/favicon.ico</code>; it never connects anywhere at other times. No third-party icon service is used, so nobody else learns which services you registered. No cookies are sent, the top page is only read from the site itself, and an icon the site keeps on another server (such as a CDN) is fetched from there, but never from an IP address or a server with a local network name. The proxy settings of the operating system are used, and the certificate authorities trusted by the operating system (the Windows certificate store, the macOS keychains) are trusted besides those of Java, so that fetching also works in company networks that inspect HTTPS.</p>
+    <p>The site of well-known services is filled in. If it is not, or if you use the service on another site, enter the address of that site (for example <code>example.com</code>).</p>
+    <p>The image is scaled to a 64 x 64 PNG and stored with the service in the encrypted configuration file, and in backups. PNG, JPEG, GIF, BMP and ICO images can be used; a site that only offers SVG or WebP icons is not supported. <b>Remove set icon</b> removes it again. To hide the icons, turn off <b>Show the icons of the services</b> on the <b>Display</b> tab of <b>et-OTP-v2 → Settings</b>.</p>
+  </section>
+
   <section id="backup">
     <h2>Backup and restore</h2>
     <p>A configuration file protected for your Windows user cannot be opened on another computer or by another Windows user. Export a backup in case the computer breaks or the operating system is installed again. With password protection, a backup also helps if the configuration file is lost.</p>
@@ -152,6 +166,7 @@ if not defined MFA_CODE exit /b 1</code></pre>
     <h2>License and credits</h2>
     <p>et-otp-v2 is free software under the <a href="https://github.com/DISK0401/et-otp-v2/blob/main/LICENSE">GNU General Public License v2.0 only</a>.</p>
     <p>It is a continuation of <a href="https://github.com/ecki/et-otp">et-otp</a> by Bernd Eckenfels. It includes a Java port of the QR code decoder <a href="https://github.com/dlbeer/quirc">quirc</a> by Daniel Beer (ISC license).</p>
+    <p>The bundled service icons come from <a href="https://github.com/simple-icons/simple-icons">Simple Icons</a> (CC0 1.0). The logos are trademarks of their owners; et-otp-v2 shows them only to identify the services you registered and is not affiliated with their owners.</p>
   </section>
 </main>
 

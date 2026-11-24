@@ -214,6 +214,11 @@ public class GUI implements AccountRow.Actions
             System.exit(CodeCommand.main(args));
             return;
         }
+        // the icons fetched from the sites of the services use the proxy of the operating system (issue #27);
+        // the default proxy selector reads this once, so it is set before anything connects
+        if (System.getProperty("java.net.useSystemProxies") == null) {
+            System.setProperty("java.net.useSystemProxies", "true");
+        }
         SwingUtilities.invokeLater(GUI::start);
     }
 
@@ -1273,7 +1278,7 @@ public class GUI implements AccountRow.Actions
             listPanel.add(empty);
         }
         for (Account a : accounts) {
-            AccountRow row = new AccountRow(a, msg, this);
+            AccountRow row = new AccountRow(a, msg, this, uiSettings.showIcons());
             row.setCodesHidden(uiSettings.codesHidden());
             row.setAlignmentX(Component.LEFT_ALIGNMENT);
             row.setBackground(listPanel.getBackground());
@@ -1389,6 +1394,7 @@ public class GUI implements AccountRow.Actions
         }
         for (AccountRow row : rows) {
             row.refreshName();
+            row.refreshIcon(); // without an issuer, the name chooses the bundled icon
         }
         applyFilter(false); // the new name may (not) match the search text
     }
@@ -1448,6 +1454,228 @@ public class GUI implements AccountRow.Actions
         showSelection();
         // keep the keyboard on the moved row, so it can be moved again
         rows.get(to).editButton().requestFocusInWindow();
+    }
+
+
+    // --- icons of the services (issue #27) ---
+
+    /** @return true if the icon of the service can be changed now; else the user is told why (if needed) */
+    private boolean iconChangeable(Account account)
+    {
+        if (!opened || lockPending || indexOf(account) < 0) {
+            return false; // chosen in a menu that was open when locking
+        }
+        if (readOnlyReason != null) {
+            JOptionPane.showMessageDialog(frame, msg.format("status.readOnly", readOnlyReason),
+                                          msg.get("error.save.title"), JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+        return true;
+    }
+
+
+    @Override
+    public void chooseIcon(Account account)
+    {
+        if (!iconChangeable(account)) {
+            return;
+        }
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileFilter(new FileNameExtensionFilter(msg.get("icon.fileFilter"),
+                                                          "png", "jpg", "jpeg", "gif", "bmp", "ico"));
+        if (chooser.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        File file = chooser.getSelectedFile();
+        setBusy(true);
+        new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() throws Exception
+            {
+                if (Files.size(file.toPath()) > IconImages.MAX_FILE_BYTES) {
+                    throw new IOException(msg.format("icon.tooLarge", IconImages.MAX_FILE_BYTES / 1024));
+                }
+                return IconImages.toStored(Files.readAllBytes(file.toPath()));
+            }
+
+            @Override
+            protected void done()
+            {
+                setBusy(false);
+                try {
+                    setIcon(account, get(), null);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    JOptionPane.showMessageDialog(frame, msg.format("icon.fileError", file.getName(), reason(e)),
+                                                  msg.get("row.icon.file"), JOptionPane.WARNING_MESSAGE);
+                }
+            }
+        }.execute();
+    }
+
+
+    @Override
+    public void fetchIcon(Account account)
+    {
+        if (!iconChangeable(account)) {
+            return;
+        }
+        String suggested = !account.site().isEmpty() ? account.site() : ServiceIcons.domain(account);
+        JTextField siteField = new JTextField(suggested, 28);
+        JPanel form = new JPanel(new GridBagLayout());
+        GridBagConstraints c = new GridBagConstraints();
+        c.gridx = 0;
+        c.gridwidth = 2;
+        c.anchor = GridBagConstraints.WEST;
+        for (String key : new String[] { suggested.isEmpty() ? "icon.fetch.unknown" : "icon.fetch.known",
+                                         "icon.fetch.note" }) {
+            JLabel note = SetupWizard.note(msg.get(key));
+            note.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+            form.add(note, c);
+        }
+        c.insets = new Insets(4, 0, 4, 8);
+        JPanel siteRow = new JPanel(new BorderLayout(8, 0));
+        siteRow.add(new JLabel(msg.get("icon.fetch.site")), BorderLayout.WEST);
+        siteRow.add(siteField, BorderLayout.CENTER);
+        form.add(siteRow, c);
+        String title = msg.format("icon.fetch.title", displayName(account));
+        Object[] options = { msg.get("icon.fetch.ok"), msg.get("icon.fetch.cancel") };
+        String host;
+        while (true) {
+            SwingUtilities.invokeLater(siteField::requestFocusInWindow);
+            int answer = JOptionPane.showOptionDialog(frame, form, title, JOptionPane.OK_CANCEL_OPTION,
+                                                      JOptionPane.QUESTION_MESSAGE, null, options, options[0]);
+            if (answer != 0 || !iconChangeable(account)) {
+                return;
+            }
+            host = IconFetcher.siteHost(siteField.getText());
+            if (host != null) {
+                break;
+            }
+            JOptionPane.showMessageDialog(frame, msg.get("icon.fetch.invalid"), title, JOptionPane.WARNING_MESSAGE);
+        }
+        String site = host;
+        setBusy(true);
+        setStatus(msg.format("status.iconFetching", site), false);
+        new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() throws Exception
+            {
+                return new IconFetcher(site).fetch();
+            }
+
+            @Override
+            protected void done()
+            {
+                setBusy(false);
+                setStatus(null, false); // also if the result is dropped (the service was deleted or locked)
+                try {
+                    String icon = get();
+                    if (setIcon(account, icon, site)) {
+                        setStatus(msg.format("status.iconFetched", displayName(account), site), false);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (ExecutionException e) {
+                    setStatus(msg.format("status.iconNotFetched", site, fetchProblem(e.getCause())), true);
+                }
+            }
+        }.execute();
+    }
+
+
+    /** @return why the icon could not be fetched, for the user */
+    private String fetchProblem(Throwable cause)
+    {
+        if (cause instanceof IconFetcher.Problem) {
+            IconFetcher.Problem p = (IconFetcher.Problem) cause;
+            switch (p.kind) {
+                case OUTSIDE:
+                    return msg.format("icon.error.outside", String.valueOf(p.detail));
+                case STATUS:
+                    return msg.format("icon.error.status", p.detail);
+                case TOO_LARGE:
+                    return msg.get("icon.error.tooLarge");
+                case TIMEOUT:
+                    return msg.get("icon.error.timeout");
+                default:
+                    return msg.get("icon.error.redirects");
+            }
+        }
+        if (cause instanceof java.net.http.HttpTimeoutException) {
+            return msg.get("icon.error.timeout");
+        }
+        if (cause instanceof javax.net.ssl.SSLException) {
+            return msg.format("icon.error.tls", cause.getMessage());
+        }
+        if (cause instanceof java.net.ConnectException || cause instanceof java.nio.channels.UnresolvedAddressException
+            || cause instanceof java.net.UnknownHostException) {
+            return msg.get("icon.error.connect");
+        }
+        if (cause instanceof IOException && cause.getMessage() != null
+            && cause.getMessage().startsWith("Unsupported or damaged image")) {
+            return msg.get("icon.error.image");
+        }
+        return reason(new ExecutionException(cause));
+    }
+
+
+    /** @return the cause of a failed background task, for the user */
+    private static String reason(ExecutionException e)
+    {
+        Throwable cause = e.getCause() != null ? e.getCause() : e;
+        String message = cause.getMessage();
+        if (cause instanceof java.net.http.HttpTimeoutException) {
+            return "timeout";
+        }
+        return message == null || message.trim().isEmpty() ? cause.getClass().getSimpleName() : message;
+    }
+
+
+    @Override
+    public void removeIcon(Account account)
+    {
+        if (account.icon() == null || !iconChangeable(account)) {
+            return;
+        }
+        if (setIcon(account, null, account.site())) {
+            setStatus(msg.format("status.iconRemoved", displayName(account)), false);
+        }
+    }
+
+
+    /**
+     * Stores the icon with the service, if it is still registered and the list is not locked.
+     *
+     * @param site the site the icon was fetched from, or null to keep the site
+     * @return true if it was saved
+     */
+    private boolean setIcon(Account account, String icon, String site)
+    {
+        if (!opened || indexOf(account) < 0) {
+            return false; // deleted, or the list was locked and opened again (with new accounts)
+        }
+        String oldIcon = account.icon();
+        String oldSite = account.site();
+        account.setIcon(icon);
+        if (site != null) {
+            account.setSite(site);
+        }
+        if (!persist()) {
+            account.setIcon(oldIcon);
+            account.setSite(oldSite);
+            return false;
+        }
+        for (AccountRow row : rows) {
+            if (row.account() == account) {
+                row.refreshIcon();
+            }
+        }
+        if (site == null && icon != null) {
+            setStatus(msg.format("status.iconSet", displayName(account)), false);
+        }
+        return true;
     }
 
 
@@ -1875,6 +2103,19 @@ public class GUI implements AccountRow.Actions
         });
         panel.add(hide, c);
         panel.add(SetupWizard.note(msg.format("display.hide.note", AccountRow.REVEAL_MILLIS / 1000)), c);
+
+        // issue #27
+        JCheckBox icons = new JCheckBox(msg.get("settings.showIcons"), uiSettings.showIcons());
+        icons.addActionListener(e -> {
+            uiSettings.setShowIcons(icons.isSelected());
+            saveUiSettings();
+            if (opened) {
+                rebuildList();
+            }
+        });
+        c.insets = new Insets(10, 0, 2, 0);
+        panel.add(icons, c);
+        c.insets = new Insets(2, 0, 2, 0);
 
         // only where it works; the setting is not shown on other systems
         if (CaptureExclusion.isSupported()) {
