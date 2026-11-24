@@ -56,6 +56,12 @@ final class Account
     private final String algorithm;
     private final int digits;
     private final int period;
+    /** the issuer of the QR code (otpauth), to find the icon; empty if unknown. */
+    private String issuer = "";
+    /** the icon chosen by the user or fetched from the site: a PNG in Base64, or null (issue #27). */
+    private String icon;
+    /** the site the icon was fetched from (a host name), or empty. */
+    private String site = "";
 
 
     Account(String name, String secret) throws InvalidException
@@ -112,6 +118,38 @@ final class Account
     String secret()
     {
         return secret;
+    }
+
+    String issuer()
+    {
+        return issuer;
+    }
+
+    void setIssuer(String issuer)
+    {
+        this.issuer = issuer == null ? "" : issuer.trim();
+    }
+
+    /** @return the icon chosen by the user or fetched, a PNG in Base64, or null; it is not decoded here */
+    String icon()
+    {
+        return icon;
+    }
+
+    void setIcon(String icon)
+    {
+        this.icon = icon == null || icon.trim().isEmpty() ? null : icon.trim();
+    }
+
+    /** @return the host name the user entered to fetch the icon, or empty */
+    String site()
+    {
+        return site;
+    }
+
+    void setSite(String site)
+    {
+        this.site = site == null ? "" : site.trim();
     }
 
     String algorithm()
@@ -216,7 +254,22 @@ final class Account
         if (secret.isEmpty()) {
             throw new InvalidException("error.otpauth.noSecret");
         }
-        return new Account(nameFrom(uri.getPath(), q.getOrDefault("issuer", "")), secret, algorithm, digits, period);
+        String issuer = q.getOrDefault("issuer", "");
+        Account account = new Account(nameFrom(uri.getPath(), issuer), secret, algorithm, digits, period);
+        account.setIssuer(issuerFrom(uri.getPath(), issuer));
+        return account;
+    }
+
+
+    /** @return the issuer parameter, else the issuer in the label ("Issuer:account"), else empty */
+    static String issuerFrom(String path, String issuer)
+    {
+        if (issuer != null && !issuer.trim().isEmpty()) {
+            return issuer.trim();
+        }
+        String label = path == null ? "" : path.replaceFirst("^/", "").trim();
+        int colon = label.indexOf(':');
+        return colon >= 0 ? label.substring(0, colon).trim() : "";
     }
 
 

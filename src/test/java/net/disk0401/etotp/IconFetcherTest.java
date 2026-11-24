@@ -1,0 +1,233 @@
+/*
+ * IconFetcherTest.java - et-otp-v2: GPL Java TOTP soft token.
+ * Copyright (C) 2026 DISK0401.
+ */
+package net.disk0401.etotp;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.util.concurrent.CountDownLatch;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.junit.jupiter.api.Test;
+
+
+/** The parts of fetching that need no network; nothing here connects anywhere. */
+class IconFetcherTest
+{
+    @Test
+    void siteHostFromWhatTheUserEntered()
+    {
+        assertEquals("example.com", IconFetcher.siteHost("example.com"));
+        assertEquals("example.com", IconFetcher.siteHost(" Example.COM. "));
+        assertEquals("www.example.com", IconFetcher.siteHost("https://www.example.com/login?next=/"));
+        // http is taken as the site, but only HTTPS is used
+        assertEquals("example.com", IconFetcher.siteHost("http://example.com"));
+        assertEquals("example.com:8443", IconFetcher.siteHost("https://example.com:8443/"));
+        assertEquals("example.com", IconFetcher.siteHost("example.com:443"));
+        assertEquals("intranet", IconFetcher.siteHost("intranet"));
+        assertEquals("xn--r8jz45g.jp", IconFetcher.siteHost("例え.jp"));
+    }
+
+    @Test
+    void invalidSites()
+    {
+        assertNull(IconFetcher.siteHost(null));
+        assertNull(IconFetcher.siteHost(""));
+        assertNull(IconFetcher.siteHost("ftp://example.com"));
+        assertNull(IconFetcher.siteHost("javascript:alert(1)"));
+        assertNull(IconFetcher.siteHost("exa mple.com"));
+        assertNull(IconFetcher.siteHost("user@example.com"));
+        assertNull(IconFetcher.siteHost("https://user:pw@example.com/"));
+        assertNull(IconFetcher.siteHost("example.com:99999"));
+        assertNull(IconFetcher.siteHost("example..com"));
+        assertNull(IconFetcher.siteHost("exa_mple.com"));
+    }
+
+    @Test
+    void requestsStayWithinTheSite()
+    {
+        assertTrue(IconFetcher.sameSite("example.com", "example.com"));
+        assertTrue(IconFetcher.sameSite("example.com", "www.example.com"));
+        assertTrue(IconFetcher.sameSite("www.example.com", "example.com"));
+        assertTrue(IconFetcher.sameSite("example.com", "static.example.com"));
+        assertTrue(IconFetcher.sameSite("example.com", "EXAMPLE.com"));
+        assertFalse(IconFetcher.sameSite("example.com", "example.com.evil.test"));
+        assertFalse(IconFetcher.sameSite("example.com", "badexample.com"));
+        assertFalse(IconFetcher.sameSite("example.com", "cdn.example.net"));
+        assertFalse(IconFetcher.sameSite("accounts.example.co.jp", "co.jp"), "never the parent domain");
+        assertFalse(IconFetcher.sameSite("example.com", null));
+    }
+
+    @Test
+    void onlyHttpsWithinTheSiteIsRequested()
+    {
+        IconFetcher f = new IconFetcher("example.com");
+        assertTrue(f.allowed(URI.create("https://example.com/favicon.ico")));
+        assertTrue(f.allowed(URI.create("https://www.example.com:443/a.png")));
+        assertFalse(f.allowed(URI.create("http://example.com/favicon.ico")));
+        assertFalse(f.allowed(URI.create("https://example.com:8443/favicon.ico")));
+        assertFalse(f.allowed(URI.create("https://other.test/favicon.ico")));
+        assertFalse(f.allowed(URI.create("https://user@example.com/favicon.ico")));
+        assertFalse(f.allowed(null));
+        IconFetcher port = new IconFetcher("example.com:8443");
+        assertTrue(port.allowed(URI.create("https://example.com:8443/favicon.ico")));
+        assertFalse(port.allowed(URI.create("https://example.com/favicon.ico")));
+    }
+
+    private static List<String> links(String html, String page)
+    {
+        return IconFetcher.iconLinks(html, URI.create(page)).stream().map(l -> l.uri.toString())
+                          .collect(Collectors.toList());
+    }
+
+    @Test
+    void findsIconLinks()
+    {
+        String html = "<html><head>"
+                      + "<link rel=\"stylesheet\" href=\"/style.css\">"
+                      + "<LINK REL='shortcut icon' HREF='/favicon.ico'>"
+                      + "<link rel=icon type=image/png sizes=32x32 href=icon-32.png>"
+                      + "<link rel=\"icon\" type=\"image/png\" sizes=\"192x192\" href=\"https://example.com/icon-192.png?v=1&amp;x=2\">"
+                      + "<link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\">"
+                      + "<link rel=\"icon\" type=\"image/svg+xml\" href=\"/icon.svg\">"
+                      + "<link rel=\"icon\" href=\"/icon.webp\">"
+                      + "<link rel=\"mask-icon\" href=\"/mask.png\" color=\"#000\">"
+                      + "<link rel=\"icon\" href=\"data:image/png;base64,AAAA\">"
+                      + "<link rel=\"icon\" href=\"http://example.com/insecure.png\">"
+                      + "<!-- <link rel=\"icon\" sizes=\"64x64\" href=\"/commented.png\"> -->"
+                      + "</head></html>";
+        assertEquals(List.of("https://example.com/apple-touch-icon.png",       // 180, the smallest of at least 64
+                             "https://example.com/icon-192.png?v=1&x=2",
+                             "https://example.com/favicon.ico",                // then the larger of the smaller,
+                             "https://example.com/dir/icon-32.png"),           // in the order of the page
+                     links(html, "https://example.com/dir/page"));
+    }
+
+    @Test
+    void baseAddressIsUsed()
+    {
+        String html = "<base href=\"https://www.example.com/app/\"><link rel=\"icon\" href=\"favicon.png\">";
+        assertEquals(List.of("https://www.example.com/app/favicon.png"), links(html, "https://example.com/"));
+    }
+
+    @Test
+    void pagesWithoutIcons()
+    {
+        assertEquals(List.of(), links("", "https://example.com/"));
+        assertEquals(List.of(), links("<link rel=\"icon\">", "https://example.com/"));
+        assertEquals(List.of(), links("<link rel=\"icon\" href=\"::invalid uri::\">", "https://example.com/"));
+        assertEquals(List.of(), links("<link href=\"/favicon.ico\">", "https://example.com/"));
+    }
+
+    @Test
+    void redirectsAreLimited() throws IOException
+    {
+        URI page = URI.create("https://example.com/a/b");
+        assertEquals(URI.create("https://www.example.com/"), IconFetcher.redirect(page, "https://www.example.com/", 0));
+        assertEquals(URI.create("https://example.com/a/c"), IconFetcher.redirect(page, " c ", 2));
+        IconFetcher.Problem tooMany = assertThrows(IconFetcher.Problem.class,
+                                                   () -> IconFetcher.redirect(page, "/x", IconFetcher.MAX_REDIRECTS));
+        assertEquals(IconFetcher.Problem.Kind.REDIRECTS, tooMany.kind);
+        assertThrows(IconFetcher.Problem.class, () -> IconFetcher.redirect(page, null, 0));
+        assertThrows(IconFetcher.Problem.class, () -> IconFetcher.redirect(page, "", 0));
+        assertThrows(IconFetcher.Problem.class, () -> IconFetcher.redirect(page, "::not a uri::", 0));
+        // a redirect to another server or to http is followed by nothing: the next request is not allowed
+        IconFetcher f = new IconFetcher("example.com");
+        assertFalse(f.allowed(IconFetcher.redirect(page, "https://cdn.example.net/favicon.ico", 0)));
+        assertFalse(f.allowed(IconFetcher.redirect(page, "http://example.com/favicon.ico", 0)));
+    }
+
+    /** Never ends, as a site that sends without end. */
+    private static final class Endless extends InputStream
+    {
+        @Override
+        public int read()
+        {
+            return 'x';
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len)
+        {
+            java.util.Arrays.fill(b, off, off + len, (byte) 'x');
+            return len;
+        }
+    }
+
+    private static long seconds(int s)
+    {
+        return System.nanoTime() + s * 1_000_000_000L;
+    }
+
+    @Test
+    void largeAnswersAreLimited() throws IOException
+    {
+        assertEquals(1000, IconFetcher.read(new Endless(), 1000, true, seconds(10)).length, "the start of a page");
+        IconFetcher.Problem p = assertThrows(IconFetcher.Problem.class,
+                                             () -> IconFetcher.read(new Endless(), 1000, false, seconds(10)));
+        assertEquals(IconFetcher.Problem.Kind.TOO_LARGE, p.kind);
+        assertEquals(3, IconFetcher.read(new ByteArrayInputStream(new byte[3]), 1000, false, seconds(10)).length);
+    }
+
+    /** A site that stops sending: the stream is closed at the deadline, and reading ends. */
+    @Test
+    void stalledAnswersEndAtTheDeadline()
+    {
+        CountDownLatch closed = new CountDownLatch(1);
+        InputStream stalled = new InputStream() {
+            @Override
+            public int read() throws IOException
+            {
+                try {
+                    closed.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                throw new IOException("closed");
+            }
+
+            @Override
+            public void close()
+            {
+                closed.countDown();
+            }
+        };
+        long start = System.nanoTime();
+        IconFetcher.Problem p = assertThrows(IconFetcher.Problem.class,
+                                             () -> IconFetcher.read(stalled, 1000, false, System.nanoTime() + 300_000_000L));
+        assertEquals(IconFetcher.Problem.Kind.TIMEOUT, p.kind);
+        assertTrue(System.nanoTime() - start < 5_000_000_000L);
+        assertThrows(IconFetcher.Problem.class,
+                     () -> IconFetcher.read(new Endless(), 1000, true, System.nanoTime() - 1), "no time left");
+    }
+
+    /** The icon may be on a CDN, but never on a server of the local network. */
+    @Test
+    void iconsMayComeFromPublicServers()
+    {
+        IconFetcher f = new IconFetcher("slack.com");
+        assertTrue(f.allowedIcon(URI.create("https://a.slack-edge.com/img/ico/favicon.ico")));
+        assertTrue(f.allowedIcon(URI.create("https://slack.com/favicon.ico")));
+        assertFalse(f.allowed(URI.create("https://a.slack-edge.com/img/ico/favicon.ico")), "not for the page");
+        assertFalse(f.allowedIcon(URI.create("http://a.slack-edge.com/favicon.ico")));
+        assertFalse(f.allowedIcon(URI.create("https://cdn.example.net:8443/favicon.ico")));
+        assertFalse(f.allowedIcon(URI.create("https://user@cdn.example.net/favicon.ico")));
+        for (String local : new String[] { "https://192.168.1.1/x.png", "https://127.1/x.png", "https://[::1]/x.png",
+                                           "https://intranet/x.png", "https://localhost/x.png",
+                                           "https://printer.local/x.png", "https://nas.home.arpa/x.png" }) {
+            assertFalse(f.allowedIcon(URI.create(local)), local);
+        }
+        // the site itself may be in the local network: the user entered it
+        assertTrue(new IconFetcher("intranet").allowedIcon(URI.create("https://intranet/favicon.ico")));
+    }
+}

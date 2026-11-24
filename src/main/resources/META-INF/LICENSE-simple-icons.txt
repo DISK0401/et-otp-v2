@@ -1,0 +1,289 @@
+et-otp-v2 shows icons of the following services, drawn from the SVG files of
+Simple Icons 16.36.0 (https://github.com/simple-icons/simple-icons). Simple Icons is
+released under CC0 1.0 Universal (https://creativecommons.org/publicdomain/zero/1.0/);
+the icons listed here have no other license in its data.
+
+CC0 covers copyright only. The logos are trademarks of their owners. et-otp-v2 shows
+them only to identify the services a user registered; it is not affiliated with,
+endorsed or sponsored by any of them.
+
+The icons (title, slug in Simple Icons, source given by Simple Icons):
+
+GitHub (github)
+    source: https://github.com/logos
+GitLab (gitlab)
+    source: https://about.gitlab.com/press/press-kit/
+Bitbucket (bitbucket)
+    source: https://atlassian.design/resources/logo-library
+Atlassian (atlassian)
+    source: https://atlassian.design/resources/logo-library
+Trello (trello)
+    source: https://atlassian.design/resources/logo-library
+Google (google)
+    source: https://partnermarketinghub.withgoogle.com
+Google Cloud (googlecloud)
+    source: https://cloud.google.com
+Apple (apple)
+    source: https://www.apple.com
+Dropbox (dropbox)
+    source: https://www.dropbox.com/branding
+Box (box)
+    source: https://www.box.com/en-gb/about-us/press
+Facebook (facebook)
+    source: https://about.meta.com/brand/resources/facebook/logo
+Meta (meta)
+    source: https://www.meta.com
+Instagram (instagram)
+    source: https://about.meta.com/brand/resources/instagram
+X (x)
+    source: https://x.com
+Discord (discord)
+    source: https://discord.com/branding
+Zoom (zoom)
+    source: https://brand.zoom.us/media-library/
+Cloudflare (cloudflare)
+    source: https://www.cloudflare.com/logo/
+DigitalOcean (digitalocean)
+    source: https://www.digitalocean.com/press/
+npm (npm)
+    source: https://www.npmjs.com
+PyPI (pypi)
+    source: https://pypi.org
+RubyGems (rubygems)
+    source: https://rubygems.org/pages/about
+NuGet (nuget)
+    source: https://github.com/NuGet/Media/blob/89f7c87245e52e8ce91d94c0a47f44c6576e3a0d/Images/MainLogo/Vector/nuget.svg
+Docker (docker)
+    source: https://www.docker.com/company/newsroom/media-resources
+Twitch (twitch)
+    source: https://brand.twitch.tv
+Reddit (reddit)
+    source: https://www.redditinc.com/brand
+Epic Games (epicgames)
+    source: https://dev.epicgames.com/docs/services/en-US/EpicAccountServices/DesignGuidelines/index.html#epicgamesbrandguidelines
+PlayStation (playstation)
+    source: https://www.playstation.com/en-us/
+Ubisoft (ubisoft)
+    source: https://www.ubisoft.com/en-US/company/overview.aspx
+EA (ea)
+    source: https://www.ea.com
+Battle.net (battledotnet)
+    source: https://battle.net
+Riot Games (riotgames)
+    source: https://www.riotgames.com/en/press
+Roblox (roblox)
+    source: https://www.roblox.com
+Square Enix (squareenix)
+    source: https://www.square-enix.com
+Coinbase (coinbase)
+    source: https://www.coinbase.com/press
+Binance (binance)
+    source: https://binance.com
+KuCoin (kucoin)
+    source: https://www.kucoin.com/news/en-kucoin-media-kit
+OKX (okx)
+    source: https://commons.wikimedia.org/wiki/File:OKX_logo.svg
+PayPal (paypal)
+    source: https://www.paypal.com/us
+Stripe (stripe)
+    source: https://stripe.com/newsroom/information
+Wise (wise)
+    source: https://wise.design/foundations/logo
+Revolut (revolut)
+    source: https://developer.revolut.com/docs/resources/marketing-assets-guidelines/marketing-guidelines
+Robinhood (robinhood)
+    source: https://press.robinhood.com
+Proton (proton)
+    source: https://proton.me/media/kit
+Tuta (tuta)
+    source: https://github.com/tutao/tutanota/blob/65d087b1bc2cb7aee46e7a46431303483d2da986/resources/favicon/logo-favicon.svg
+Zoho (zoho)
+    source: https://www.zoho.com/branding
+1Password (1password)
+    source: https://1password.com/press
+Bitwarden (bitwarden)
+    source: https://bitwarden.com/brand
+LastPass (lastpass)
+    source: https://lastpass.com/press-room/
+Dashlane (dashlane)
+    source: https://brandfolder.com/dashlane/brandkitpartners
+Keeper (keeper)
+    source: https://docs.keeper.io/en/sso-connect-cloud/graphic-assets
+Okta (okta)
+    source: https://www.okta.com/press-room/media-assets/
+Auth0 (auth0)
+    source: https://auth0.com
+Shopify (shopify)
+    source: https://www.shopify.com/brand-assets
+MailChimp (mailchimp)
+    source: https://mailchimp.com/about/brand-assets
+HubSpot (hubspot)
+    source: https://www.hubspot.com/style-guide
+Zendesk (zendesk)
+    source: https://brandland.zendesk.com
+Notion (notion)
+    source: https://www.notion.so
+Figma (figma)
+    source: https://www.figma.com/using-the-figma-brand/
+Miro (miro)
+    source: https://miro.com
+Asana (asana)
+    source: https://asana.com/brand
+ClickUp (clickup)
+    source: https://clickup.com/brand
+Airtable (airtable)
+    source: https://airtable.com/newsroom
+Evernote (evernote)
+    source: https://evernote.com/about-us
+LINE (line)
+    source: https://line.me/en/logo
+Rakuten (rakuten)
+    source: https://global.rakuten.com/corp/news/media
+DMM (dmm)
+    source: https://dmm-corp.com/presskit
+pixiv (pixiv)
+    source: https://policies.pixiv.net/en.html#brand
+niconico (niconico)
+    source: https://www.nicovideo.jp
+Zaim (zaim)
+    source: https://zaim.net
+Namecheap (namecheap)
+    source: https://www.namecheap.com
+GoDaddy (godaddy)
+    source: https://aboutus.godaddy.net/newsroom/media-resources/
+OVH (ovh)
+    source: https://www.ovh.com/ca/en/newsroom/
+Hetzner (hetzner)
+    source: https://www.hetzner.com
+Vultr (vultr)
+    source: https://www.vultr.com/company/brand-assets
+Gandi (gandi)
+    source: https://news.gandi.net/en/presskit/
+Porkbun (porkbun)
+    source: https://porkbun.design
+Vercel (vercel)
+    source: https://vercel.com/geist/brands
+Netlify (netlify)
+    source: https://www.netlify.com/press/
+Render (render)
+    source: https://render.com
+Railway (railway)
+    source: https://railway.app
+Fly.io (flydotio)
+    source: https://fly.io/docs/about/brand
+Supabase (supabase)
+    source: https://github.com/supabase/supabase/blob/4031a7549f5d46da7bc79c01d56be4177dc7c114/packages/common/assets/images/supabase-logo-wordmark--light.svg
+PlanetScale (planetscale)
+    source: https://planetscale.com
+Fastly (fastly)
+    source: https://assets.fastly.com/style-guide/docs/
+Sentry (sentry)
+    source: https://sentry.io/branding/
+Datadog (datadog)
+    source: https://www.datadoghq.com/about/resources
+New Relic (newrelic)
+    source: https://newrelic.com/about/media-assets
+Grafana (grafana)
+    source: https://grafana.com
+HashiCorp (hashicorp)
+    source: https://www.hashicorp.com
+MongoDB (mongodb)
+    source: https://www.mongodb.com/pressroom
+Redis (redis)
+    source: https://redis.io/brand-guidelines
+Elastic (elastic)
+    source: https://www.elastic.co/brand
+JetBrains (jetbrains)
+    source: https://www.jetbrains.com/company/brand/logos/
+CircleCI (circleci)
+    source: https://circleci.com/press
+Travis CI (travisci)
+    source: https://travis-ci.com/logo
+Codeberg (codeberg)
+    source: https://codeberg.org/Codeberg/Design/src/commit/ac514aa9aaa2457d4af3c3e13df3ab136d22a49a/logo/special/codeberg-logo_special_fake-transaprency.svg
+SourceHut (sourcehut)
+    source: https://sourcehut.org/logo/
+Launchpad (launchpad)
+    source: https://launchpad.net
+Hugging Face (huggingface)
+    source: https://huggingface.co/brand
+Replit (replit)
+    source: https://repl.it
+Anthropic (anthropic)
+    source: https://www.anthropic.com
+WordPress (wordpress)
+    source: https://wordpress.org/about/logos
+Tumblr (tumblr)
+    source: https://www.tumblr.com/logo
+Pinterest (pinterest)
+    source: https://business.pinterest.com/en/brand-guidelines
+Snapchat (snapchat)
+    source: https://www.snapchat.com/brand-guidelines
+TikTok (tiktok)
+    source: https://tiktok.com
+Mozilla (mozilla)
+    source: https://brand.mozilla.com/document/36
+eBay (ebay)
+    source: https://go.developer.ebay.com/logos
+Etsy (etsy)
+    source: https://www.etsy.com/uk/press
+Alibaba Cloud (alibabacloud)
+    source: https://www.alibabagroup.com/en/ir/reports
+Uber (uber)
+    source: https://assets.uber.com/d/k4nuxdZ8MC7E/logos/collection/151
+Patreon (patreon)
+    source: https://www.patreon.com/brand
+Ko-fi (kofi)
+    source: https://more.ko-fi.com/brand-assets
+Gumroad (gumroad)
+    source: https://gumroad.com
+Squarespace (squarespace)
+    source: https://www.squarespace.com/logo-guidelines
+Wix (wix)
+    source: https://www.wix.com/about/design-assets
+Ghost (ghost)
+    source: https://github.com/TryGhost/Admin/blob/e3e1fa3353767c3729b1658ad42cc35f883470c5/public/assets/icons/icon.svg
+Substack (substack)
+    source: https://on.substack.com
+HackerOne (hackerone)
+    source: https://www.hackerone.com/branding
+Bugcrowd (bugcrowd)
+    source: https://www.bugcrowd.com/about/press-kit
+Backblaze (backblaze)
+    source: https://www.backblaze.com/company/news.html
+Wasabi (wasabi)
+    source: https://wasabi.com
+Synology (synology)
+    source: https://www.synology.com/en-global/company/branding
+QNAP (qnap)
+    source: https://marketing.qnap.com/resource/qnap-logo-k100
+Ubiquiti (ubiquiti)
+    source: https://www.ui.com
+NordVPN (nordvpn)
+    source: https://nordvpn.com/press-area/
+ExpressVPN (expressvpn)
+    source: https://www.expressvpn.com/press
+OpenVPN (openvpn)
+    source: https://openvpn.net
+Fortinet (fortinet)
+    source: https://www.fortinet.com
+Cisco (cisco)
+    source: https://www.cisco.com
+Citrix (citrix)
+    source: https://brand.citrix.com
+VMware (vmware)
+    source: https://myvmware.workspaceair.com
+SAP (sap)
+    source: https://www.sap.com
+Samsung (samsung)
+    source: https://www.samsung.com/us/about-us/brand-identity/logo/
+Xiaomi (xiaomi)
+    source: https://www.mi.com/global
+Huawei (huawei)
+    source: https://e.huawei.com/ph/material/partner/0a72728b864949c48b22106454352483
+Nextcloud (nextcloud)
+    source: https://nextcloud.com/press/
+Gitea (gitea)
+    source: https://github.com/go-gitea/gitea/blob/e0c753e770a64cda5e3900aa1da3d7e1f3263c9a/assets/logo.svg
+Mastodon (mastodon)
+    source: https://github.com/mastodon/mastodon/blob/7ccf7a73f1c47a8c03712c39f7c591e837cf6d08/app/javascript/images/logo-symbol-icon.svg

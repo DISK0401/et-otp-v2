@@ -20,6 +20,7 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 - Holds any number of services. Click a code or press Copy to copy it to the clipboard.
 - Registers a service by reading the QR code shown on the screen; on Windows also from a window behind other windows. A QR code image file or the key typed in also works.
 - Stores the services encrypted in `.et-otp.properties`. On Windows, choose between protection for your Windows user (DPAPI, no password) and a password (PBKDF2-HMAC-SHA256 and AES-256-GCM); on macOS and Linux a password is used.
+- Shows an icon for each service: icons of well-known services are bundled, and an icon can be fetched from the site of a service when you ask for it, or set from an image file.
 - Exports the services to a file encrypted with a password of its own. With protection for your Windows user, too, this backup can be restored on another computer.
 - The user interface is in English and Japanese. It is shown in Japanese if the language of the OS is Japanese, else in English, and can be switched on the General tab of the settings.
 - When started without a configuration file, a setup wizard opens. It asks for the protection and the location of the configuration file and, on Windows, can create a desktop shortcut. You can also choose an existing configuration file and keep using it.
@@ -90,6 +91,18 @@ For `--password-stdin`, give the password for example from a file that other use
 
 There is no way to give the password in an environment variable or as an argument: arguments can be seen by other programs, and environment variables can be read by other programs of the same user and are passed on to the programs started. `echo password | ...` works as well, but cmd starts the left side of the pipe as another cmd, whose command line, with the password, can be seen by other programs; the password also stays in the batch file or the command history. In cmd, `echo password | ...` also passes the space before the "|": write `echo password| ...` without the space.
 
+## Service icons
+
+The list shows an icon left of each service, chosen in this order:
+
+1. An image set with "Set icon from image file..." or fetched with "Fetch icon from the site..." in the edit menu (whichever was set last).
+2. A bundled icon, found by the issuer in the QR code, or by the name of the service if there is no issuer.
+3. The first letter of the name on a color derived from the name.
+
+An icon is fetched from a site only when you choose "Fetch icon from the site...", check the site shown and press Fetch; et-otp-v2 never connects at any other time. It asks the site of the service directly over HTTPS and uses no third-party icon service. No cookies are sent, the top page is only read from the site itself, redirects are followed at most three times, and an icon the site keeps on another server (such as a CDN) is fetched from there, but never from an IP address or a server with a local network name. The proxy settings of the operating system are used, and the certificate authorities trusted by the operating system (the Windows certificate store, the macOS keychains) are trusted besides those of Java, so that fetching also works in company networks that inspect HTTPS. The site of well-known services is filled in; for other services, enter the address of the site where you use the service. The domain of an e-mail address in the account name is never used.
+
+The image is scaled to a 64 x 64 PNG and stored with the service in the encrypted configuration file (and in backups), never in an unencrypted cache. PNG, JPEG, GIF, BMP and ICO images can be used; SVG and WebP icons of sites are not supported. The icons can be turned off on the Display tab of the settings.
+
 ## Backup and restore
 
 A configuration file protected for your Windows user cannot be opened on another computer or by another Windows user. Export a backup in case the computer breaks or the operating system is installed again.
@@ -124,3 +137,5 @@ Copyright (C) 2012-2020 Bernd Eckenfels (original author)
 Copyright (C) 2026 DISK0401 (changes in this fork)
 
 The QR code decoder is a Java port of [quirc](https://github.com/dlbeer/quirc) by Daniel Beer (Copyright (C) 2010-2012 Daniel Beer, ISC license). The full license text is in the source files in `src/main/java/net/disk0401/etotp/qr` and in `META-INF/LICENSE-quirc.txt` in the jar.
+
+The bundled service icons are drawn from the SVG paths of [Simple Icons](https://github.com/simple-icons/simple-icons) (CC0 1.0); `META-INF/LICENSE-simple-icons.txt` in the jar lists where each icon comes from. The logos are trademarks of their owners. CC0 covers copyright only and grants no rights to the trademarks. et-otp-v2 shows the icons only to identify the services you registered; it is not affiliated with or endorsed by their owners. Icons fetched from sites are only stored on your computer and are not part of the et-otp-v2 distribution.
