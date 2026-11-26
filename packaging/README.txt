@@ -23,6 +23,11 @@ Run with --help for the options.
 If you use this on a company or organization computer, check your organization's software
 policy first.
 
+The macOS and Linux editions also have et-otp-v2.aot, so that --code starts faster. The bundled
+Java runtime made it from its own classes and those of et-otp-v2, and it is distributed under the
+same licenses as them. It is used only with the files it was made with. Deleting it does no harm;
+the start is then slower.
+
 The licenses of the bundled Java runtime are in runtime/legal. et-otp-v2 is licensed under the
 GNU General Public License v2.0 only.
 https://disk0401.github.io/et-otp-v2/
@@ -45,6 +50,8 @@ et-otp-v2 ポータブル版
 --code <サービス名> を付けて起動すると、ウィンドウを開かずに、そのサービスのコードを出力します。例: et-otp-v2.bat --code AWS（macOS では sh et-otp-v2.command --code AWS、Linux では sh et-otp-v2.sh --code AWS）。オプションは --help で確認できます。
 
 会社や組織のパソコンで使う場合は、ソフトウェアの利用について社内のルールを確かめてから使ってください。
+
+macOS 版と Linux 版には、--code を速く起動するための et-otp-v2.aot も入っています。同梱している Java の実行環境が、自身のクラスと et-otp-v2 のクラスから作ったもので、それらと同じライセンスで配布しています。作ったときと同じファイルの組み合わせでだけ使われます。削除しても、起動が遅くなるだけです。
 
 同梱している Java の実行環境のライセンスは、runtime/legal フォルダにあります。et-otp-v2 のライセンスは GNU General Public License v2.0 only です。
 https://disk0401.github.io/et-otp-v2/ja/

@@ -107,7 +107,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>net.disk0401.etotp.GUI</mainClass>
+                            <mainClass>net.disk0401.etotp.Main</mainClass>
                             <addClasspath>false</addClasspath>
                             <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                         </manifest>

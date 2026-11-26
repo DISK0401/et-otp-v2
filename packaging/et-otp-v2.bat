@@ -16,4 +16,5 @@ if not "%~1"=="" goto console
 start "" "%~dp0runtime\bin\javaw.exe" %ETOTP_OPTS% -jar "%~dp0et-otp-v2.jar"
 exit /b 0
 :console
-"%~dp0runtime\bin\java.exe" %ETOTP_OPTS% -jar "%~dp0et-otp-v2.jar" %*
+rem The -X options keep the standard output for the code: messages of Java go to the standard error output.
+"%~dp0runtime\bin\java.exe" -XX:+DisplayVMOutputToStderr -Xlog:disable "-Xlog:all=warning,cds*=off:stderr" %ETOTP_OPTS% -jar "%~dp0et-otp-v2.jar" %*
