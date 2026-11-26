@@ -137,16 +137,69 @@ jobs:
           mkdir -p "$dir" dist
           modules="$(jdeps --print-module-deps --ignore-missing-deps "input/${APP_NAME}-${VERSION}.jar")"
           echo "Runtime modules: $modules"
-          jlink --add-modules "$modules" --strip-debug --no-man-pages --no-header-files --compress=zip-6 --output "$dir/runtime"
+          # --generate-cds-archive: the class data of the runtime, which jlink leaves out otherwise (issue #29)
+          jlink --add-modules "$modules" --strip-debug --no-man-pages --no-header-files --compress=zip-6 \
+                --generate-cds-archive --output "$dir/runtime"
           cp "input/${APP_NAME}-${VERSION}.jar" "$dir/${APP_NAME}.jar"
           cp "packaging/$LAUNCHER" packaging/README.txt "$dir/"
           chmod +x "$dir/$LAUNCHER" 2>/dev/null || true
-          "$dir/runtime/bin/java" -version
+          "$dir/runtime/bin/java" -Xshare:on -version
+          # The AOT cache of the command line use (issue #29): made by running --code once with a training file.
+          # Java uses it only with this runtime and this jar, of the same modification time. tar keeps the time;
+          # extracting a zip on Windows may shift it by the time zone, so the Windows edition has none.
+          case "$PLATFORM" in
+            windows-*) ;;
+            *)
+              # with the full paths, as the launcher gives them; the folder may be moved later
+              abs="$(cd "$dir" && pwd)"
+              echo training | "$abs/runtime/bin/java" "-XX:AOTCacheOutput=$abs/${APP_NAME}.aot" -jar "$abs/${APP_NAME}.jar" \
+                --code Training --json --password-stdin --config "$GITHUB_WORKSPACE/packaging/aot-training.properties"
+              "$dir/runtime/bin/java" -XX:AOTMode=on "-XX:AOTCache=$dir/${APP_NAME}.aot" -jar "$dir/${APP_NAME}.jar" --version
+              ;;
+          esac
           case "$PLATFORM" in
             windows-*) (cd stage && 7z a -tzip "../dist/$root.zip" "$root" >/dev/null) ;;
             *)         tar -C stage -czf "dist/$root.tar.gz" "$root" ;;
           esac
           ls -l dist
+      - name: Check the extracted portable bundle
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          PLATFORM: ${{ matrix.platform }}
+          LAUNCHER: ${{ matrix.launcher }}
+        run: |
+          root="${APP_NAME}-${VERSION}-${PLATFORM}-portable"
+          mkdir check
+          case "$PLATFORM" in
+            windows-*) 7z x -ocheck "dist/$root.zip" >/dev/null ;;
+            *)         tar -C check -xzf "dist/$root.tar.gz" ;;
+          esac
+          dir="check/$root"
+          "$dir/runtime/bin/java" -Xshare:on -version
+          case "$PLATFORM" in
+            windows-*) ;;
+            *) "$dir/runtime/bin/java" -XX:AOTMode=on "-XX:AOTCache=$dir/${APP_NAME}.aot" -jar "$dir/${APP_NAME}.jar" --version ;;
+          esac
+          # the standard output holds only what the command writes, and nothing goes to the standard error output
+          run() {
+            case "$PLATFORM" in
+              windows-*) cmd //c "$(cygpath -w "$dir/$LAUNCHER")" "$@" ;;
+              *)         sh "$dir/$LAUNCHER" "$@" ;;
+            esac
+          }
+          expect() {
+            local want="$1"; shift
+            local out status=0
+            out="$(run "$@" 2>err.txt | tr -d '\r')" || status=$?
+            if [ "$status" -ne 0 ] || [ "$out" != "$want" ] || [ -s err.txt ]; then
+              echo "::error::$* exited with $status and wrote '$out' (expected '$want'), standard error: $(cat err.txt)"
+              exit 1
+            fi
+            echo "$*: $out"
+          }
+          expect "${APP_NAME} ${VERSION}" --version
+          echo training > pw.txt
+          expect Training --list --password-stdin --config "$GITHUB_WORKSPACE/packaging/aot-training.properties" < pw.txt
       - name: Check signatures of the bundled runtime
         if: runner.os == 'Windows'
         shell: pwsh
