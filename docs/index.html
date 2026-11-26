@@ -35,12 +35,12 @@
     <ul>
       <li>Generates two-step verification codes (TOTP, RFC 6238) and shows the next code and the remaining time. SHA-1, SHA-256 and SHA-512, 6 to 8 digits and any period are supported.</li>
       <li>Holds any number of services. Click a code or press Copy to copy it to the clipboard.</li>
-      <li>Registers a service by reading the QR code shown on the screen; on Windows also from a window behind other windows. A QR code image file or the key typed in also works.</li>
+      <li>Registers a service by reading a QR code shown on the screen, on Windows even from a window behind other windows. You can also register from a QR code image file or by typing in the key.</li>
       <li>Stores the services encrypted. On Windows, choose between protection for your Windows user (no password) and a password; on macOS and Linux a password is used.</li>
       <li>Shows an icon for each service: icons of well-known services are bundled, and an icon can be fetched from the site of a service when you ask for it.</li>
       <li>Exports the services to an encrypted file that can be restored on another computer.</li>
       <li>English and Japanese user interface.</li>
-      <li>With password protection, locks again after a time without use or when the computer is locked.</li>
+      <li>With password protection, locks again after a period without use or when the computer is locked.</li>
       <li>Filters the services by name and copies a code with the keyboard only; the order of the services can be changed.</li>
       <li>Hides the codes on request; on Windows, the windows can also be left out of screen sharing and screenshots.</li>
     </ul>
@@ -66,21 +66,21 @@
   <section id="setup">
     <h2>Register a service</h2>
     <ol>
-      <li>Start et-otp-v2. On the first start a setup wizard opens: choose the protection, and a password if you protect with a password. You can change the location of the configuration file with <b>Change...</b>, or choose an existing configuration file to keep using it. On Windows it can also create a desktop shortcut.</li>
+      <li>Start et-otp-v2. The first time, a setup wizard opens: choose how to protect the services and, for password protection, set a password. You can change the location of the configuration file with <b>Change...</b>, or choose an existing configuration file to keep using it. On Windows it can also create a desktop shortcut.</li>
       <li>In the browser, open the two-step verification setup page of the service so that it shows the QR code.</li>
       <li>In et-otp-v2, press <b>Read QR code from screen</b>. A list of your screens and windows opens, and the one with the QR code is selected. Check it, press <b>Read</b>, check the name of the service and press <b>OK</b> to register it. The images are only used for the list and to find QR codes; they are not saved.</li>
       <li>Type the code shown by et-otp-v2 into the setup page of the service. Without this step the service does not complete the setup.</li>
     </ol>
-    <p>If no QR code is found, check that it is not too small (enlarge the page with Ctrl and +). With a QR code image file use <b>QR code image file...</b>, and with the key (a text of letters and digits) use <b>Enter key...</b>.</p>
-    <p>With many services, type part of a name into the search field: only the services whose name contains the text are shown. Case and the difference of full width and half width characters are ignored. When a button of the window has the focus, typing letters or digits starts the search; for Japanese, press <b>Ctrl+F</b> (<b>⌘F</b> on macOS) to go to the search field first. If one service is shown, <b>Enter</b> copies its code; with several, choose one with the up and down keys first. <b>Esc</b> shows all services again.</p>
-    <p>To change the order, press <b>Edit</b> of a service or right-click its row, and choose <b>Move up</b>, <b>Move down</b> or <b>Move to top</b>. The order is saved in the configuration file, and <code>--list</code> on the command line uses it as well. While the list is filtered, the order cannot be changed.</p>
-    <p>The services are saved to <code>.et-otp.properties</code> in your home folder. To move the file to another folder or name, open <b>et-OTP-v2 → Settings</b> and press <b>Move...</b> on the <b>General</b> tab. The chosen location is remembered in <code>.et-otp-location.properties</code> in your home folder and used on the next start; a desktop shortcut created by et-otp-v2 is updated as well. Without a chosen location, a <code>.et-otp.properties</code> in the working directory is used if it exists (same as et-otp 1.x). <b>Help → About</b> shows the full path. The language and the window position are saved to <code>.et-otp-ui.properties</code> in the same folder.</p>
-    <p>With password protection, the services are locked again so that nobody can see the codes while you are away. Locking removes the codes from the window and asks for the password again; a code you copied is also removed from the clipboard if it is still there. Open dialogs (entering a key, the settings) are closed, and unconfirmed changes are not saved. By default, et-otp-v2 locks after 5 minutes without use, and when the computer is locked or sleeps. Change this on the <b>Lock</b> tab of <b>et-OTP-v2 → Settings</b>, where locking when the window is minimized can be switched on as well. To lock at once, choose <b>et-OTP-v2 → Lock</b> (<b>Ctrl+L</b>, <b>⌘L</b> on macOS). A locked computer is detected on Windows and macOS; on Linux, et-otp-v2 locks after the time without use and after sleep. With protection for your Windows user, no password is needed to open the services, so they are not locked.</p>
+    <p>If no QR code is found, check that it is not too small (enlarge the page with Ctrl and +). If you have a QR code image file, use <b>QR code image file...</b>; if you know the key (a string of letters and digits), use <b>Enter key...</b>.</p>
+    <p>With many services, type part of a name into the search field: only the services whose name contains the text are shown. The search ignores case and the difference between full-width and half-width characters. When a button in the window has focus, typing letters or digits starts the search; for Japanese, press <b>Ctrl+F</b> (<b>⌘F</b> on macOS) to go to the search field first. If one service is shown, <b>Enter</b> copies its code; with several, choose one with the up and down keys first. <b>Esc</b> shows all services again.</p>
+    <p>To change the order, press <b>Edit</b> on a service or right-click its row, and choose <b>Move up</b>, <b>Move down</b> or <b>Move to top</b>. The order is saved in the configuration file, and <code>--list</code> on the command line uses it as well. While the list is filtered, the order cannot be changed.</p>
+    <p>The services are saved to <code>.et-otp.properties</code> in your home folder. To move the file to another folder or name, open <b>et-OTP-v2 → Settings</b> and press <b>Move...</b> on the <b>General</b> tab. The chosen location is remembered in <code>.et-otp-location.properties</code> in your home folder and used on the next start; a desktop shortcut created by et-otp-v2 is updated as well. If no location has been chosen and the working directory contains a <code>.et-otp.properties</code>, that file is used (as in et-otp 1.x). <b>Help → About</b> shows the full path. The language and the window position are saved to <code>.et-otp-ui.properties</code> in the same folder.</p>
+    <p>With password protection, the services are locked again so that nobody can see the codes while you are away. Locking removes the codes from the window and asks for the password again; a code you copied is also removed from the clipboard if it is still there. Open dialogs (entering a key, the settings) are closed, and unconfirmed changes are not saved. By default, et-otp-v2 locks after 5 minutes without use, and when the computer is locked or sleeps. Change this on the <b>Lock</b> tab of <b>et-OTP-v2 → Settings</b>, where you can also turn on locking when the window is minimized. To lock at once, choose <b>et-OTP-v2 → Lock</b> (<b>Ctrl+L</b>, <b>⌘L</b> on macOS). A locked computer is detected on Windows and macOS; on Linux, et-otp-v2 locks after the time without use and after sleep. With protection for your Windows user, no password is needed to open the services, so they are not locked.</p>
     <p>When locking, the key derived from the password is overwritten in memory. The keys of the services are Java strings, which cannot be overwritten; they are freed later as unused memory.</p>
     <p>The protection can be changed on the <b>Protection</b> tab of <b>et-OTP-v2 → Settings</b>. Services protected for your Windows user cannot be read on another computer or by another Windows user, so export a <a href="#backup">backup</a> for a new computer. Keep the backup codes (recovery codes) of your services somewhere other than the computer as well.</p>
-    <p>Against screen sharing in online meetings and people looking over your shoulder, the <b>Display</b> tab of <b>et-OTP-v2 → Settings</b> has two settings.</p>
+    <p>To guard against screen sharing in online meetings and people looking over your shoulder, the <b>Display</b> tab of <b>et-OTP-v2 → Settings</b> has two settings.</p>
     <ul>
-      <li><b>Hide the codes</b> (off by default): the code and the next code are shown as "••• •••", and only while the mouse is on the service or for 5 seconds after <b>Show</b> on its row is pressed. While hidden, a code can still be copied by clicking it, with <b>Copy</b>, or with <b>Enter</b> in the search field. The bar of the remaining time is always shown.</li>
+      <li><b>Hide the codes</b> (off by default): the code and the next code are shown as "••• •••". The code is revealed only while the mouse is over the service, or for 5 seconds after you press <b>Show</b> on its row. While hidden, a code can still be copied by clicking it, with <b>Copy</b>, or with <b>Enter</b> in the search field. The remaining-time bar is always shown.</li>
       <li><b>Keep out of screen sharing and screenshots</b> (on by default; Windows 10 version 2004 or later, and macOS 27 or later): the windows and dialogs of et-OTP-v2 are left out of screen sharing, recordings and screenshots. They are not painted black: what is behind them is shown instead. On your own screen they look as usual. <b>Read QR code from screen</b> still works. On macOS, it may not work with some apps or in later versions of macOS. On Linux and on macOS 26 or earlier, this setting is not shown.</li>
     </ul>
     <p>The user interface follows the language of the OS: Japanese on a Japanese system, English otherwise. To change it, open <b>et-OTP-v2 → Settings</b> and select the language on the <b>General</b> tab.</p>
@@ -92,49 +92,49 @@
     <pre><code>for /f "delims=" %%c in ('call "C:\tools\et-otp-v2\et-otp-v2.bat" --code AWS') do set MFA_CODE=%%c
 if not defined MFA_CODE exit /b 1</code></pre>
     <ul>
-      <li>The name is the name shown in et-otp-v2. If no service has exactly this name, the case is ignored. <code>--list</code> writes the names of the registered services.</li>
-      <li>If the services are protected with a password, you are asked for it (not with <code>--password-stdin</code>); the password is not shown while you type. With protection for your Windows user, the code is written without a question.</li>
-      <li>If the code changes within 3 seconds, the next code is waited for and written.</li>
-      <li>Only the code (with <code>--json</code> the JSON) goes to the standard output; the password prompt and errors go to the standard error output. The exit code is 0 when done, 1 when failed and 2 for wrong options.</li>
-      <li>The configuration file is only read, so this also works while the window is open. Files in the format of et-otp 1.x and et-otp-v2 2.0 cannot be read: open them once in the window to convert them first.</li>
-      <li>With the portable edition for macOS run <code>sh et-otp-v2.command --code AWS</code>, for Linux <code>sh et-otp-v2.sh --code AWS</code>, with the plain JAR <code>java -jar et-otp-v2-&lt;version&gt;.jar --code AWS</code>.</li>
+      <li>Use the name shown in et-otp-v2. If no service has exactly that name, et-otp-v2 looks for one ignoring case. <code>--list</code> writes the names of the registered services.</li>
+      <li>If the services are protected with a password, you are prompted for it (unless you use <code>--password-stdin</code>), and the password is not shown as you type. With protection for your Windows user, the code is written without a prompt.</li>
+      <li>If the code changes within 3 seconds, et-otp-v2 waits for the next code and writes that one.</li>
+      <li>Only the code (or the JSON, with <code>--json</code>) goes to standard output; the password prompt and errors go to standard error. The exit code is 0 on success, 1 on failure and 2 for invalid options.</li>
+      <li>The configuration file is only read, never written, so this also works while the window is open. Files in the et-otp 1.x and et-otp-v2 2.0 formats cannot be read: open them once in the window first to convert them.</li>
+      <li>With the portable edition, run <code>sh et-otp-v2.command --code AWS</code> on macOS and <code>sh et-otp-v2.sh --code AWS</code> on Linux. With the plain JAR, run <code>java -jar et-otp-v2-&lt;version&gt;.jar --code AWS</code>.</li>
     </ul>
-    <p>More options; <code>--help</code> lists them:</p>
+    <p>Other options (<code>--help</code> lists them):</p>
     <ul>
-      <li><code>--copy</code>: copies the code to the clipboard instead of writing it. The copied code is not removed later. On Linux without an app that keeps the clipboard, the copied code is gone when et-otp-v2 ends.</li>
+      <li><code>--copy</code>: copies the code to the clipboard instead of writing it. et-otp-v2 does not clear it from the clipboard later. On Linux, if no clipboard manager is running, the copied code disappears when et-otp-v2 exits.</li>
       <li><code>--next</code>: writes the code of the next period, without waiting for the code to change.</li>
       <li><code>--json</code>: writes the result as JSON. For <code>--code</code>: the name (<code>name</code>), the code (<code>code</code>), the seconds left (<code>secondsLeft</code>), the period (<code>period</code>) and the next code (<code>next</code>). Characters outside ASCII are written as <code>\uXXXX</code>, so the encoding of the console does not matter.</li>
-      <li><code>--password-stdin</code>: reads the password from the first line of the standard input. This works without a console, for example in the Task Scheduler or when called from another program. A wrong password fails without asking again.</li>
+      <li><code>--password-stdin</code>: reads the password from the first line of the standard input. This works without a console, for example in the Task Scheduler or when called from another program. If the password is wrong, it fails without asking again.</li>
       <li><code>--config &lt;file&gt;</code>: uses this configuration file.</li>
       <li><code>--version</code>: writes the version.</li>
     </ul>
-    <p>For <code>--password-stdin</code>, give the password for example from a file that other users cannot read:</p>
+    <p>For example, pass the password to <code>--password-stdin</code> from a file that other users cannot read:</p>
     <pre><code>"C:\tools\et-otp-v2\et-otp-v2.bat" --code AWS --password-stdin &lt; "%USERPROFILE%\secret\et-otp-password.txt"</code></pre>
-    <p>There is no way to give the password in an environment variable or as an argument: arguments can be seen by other programs, and environment variables can be read by other programs of the same user and are passed on to the programs started. <code>echo password | ...</code> works as well, but cmd starts the left side of the pipe as another cmd, whose command line, with the password, can be seen by other programs; the password also stays in the batch file or the command history. In cmd, <code>echo password | ...</code> also passes the space before the "|": write <code>echo password| ...</code> without the space.</p>
+    <p>There is no option to pass the password in an environment variable or as an argument. Other programs can see command-line arguments, and other programs run by the same user can read environment variables, which are also passed on to every program started. <code>echo password | ...</code> also works, but cmd runs the left side of the pipe as a separate cmd whose command line, password included, is visible to other programs, and the password also stays in the batch file or the command history. Note too that in cmd, <code>echo password | ...</code> passes the space before the "|" as part of the password, so write <code>echo password| ...</code> without the space.</p>
   </section>
 
   <section id="icons">
     <h2>Service icons</h2>
-    <p>The list shows an icon left of each service, chosen in this order:</p>
+    <p>The list shows an icon to the left of each service, chosen in this order:</p>
     <ol>
       <li>An image set with <b>Set icon from image file...</b> or fetched with <b>Fetch icon from the site...</b> in the <b>Edit</b> menu of the service (whichever was set last).</li>
-      <li>A bundled icon, found by the issuer in the QR code, or, without an issuer (for example for a key typed in), by the first words of the name.</li>
+      <li>A bundled icon, matched by the issuer in the QR code, or, without an issuer (for example for a key typed in), by the first words of the name.</li>
       <li>The first letter of the name on a color derived from the name.</li>
     </ol>
-    <p><b>Fetch icon from the site...</b> shows the site it will connect to. Only when you check it and press <b>Fetch</b> does et-otp-v2 connect directly to that site over HTTPS and fetch the icon named on its top page, or <code>/favicon.ico</code>; it never connects anywhere at other times. No third-party icon service is used, so nobody else learns which services you registered. No cookies are sent, the top page is only read from the site itself, and an icon the site keeps on another server (such as a CDN) is fetched from there, but never from an IP address or a server with a local network name. The proxy settings of the operating system are used, and the certificate authorities trusted by the operating system (the Windows certificate store, the macOS keychains) are trusted besides those of Java, so that fetching also works in company networks that inspect HTTPS.</p>
-    <p>The site of well-known services is filled in. If it is not, or if you use the service on another site, enter the address of that site (for example <code>example.com</code>).</p>
+    <p><b>Fetch icon from the site...</b> shows the site it will connect to. Only when you check it and press <b>Fetch</b> does et-otp-v2 connect directly to that site over HTTPS and fetch the icon named on its top page, or <code>/favicon.ico</code>; it never connects anywhere at other times. No third-party icon service is used, so nobody else learns which services you registered. It sends no cookies and reads the top page only from the site itself. If the site keeps its icon on another server (such as a CDN), et-otp-v2 fetches it from there, but it never connects to an IP address or to a server with a local network name. It uses the proxy settings of the operating system and, besides Java's certificate authorities, trusts those the operating system trusts (the Windows certificate store, the macOS keychains), so that fetching also works on company networks that inspect HTTPS.</p>
+    <p>For well-known services the site address is filled in. If it is not, or if you use the service on a different site, enter the address of that site (for example <code>example.com</code>).</p>
     <p>The image is scaled to a 64 x 64 PNG and stored with the service in the encrypted configuration file, and in backups. PNG, JPEG, GIF, BMP and ICO images can be used; a site that only offers SVG or WebP icons is not supported. <b>Remove set icon</b> removes it again. To hide the icons, turn off <b>Show the icons of the services</b> on the <b>Display</b> tab of <b>et-OTP-v2 → Settings</b>.</p>
   </section>
 
   <section id="backup">
     <h2>Backup and restore</h2>
-    <p>A configuration file protected for your Windows user cannot be opened on another computer or by another Windows user. Export a backup in case the computer breaks or the operating system is installed again. With password protection, a backup also helps if the configuration file is lost.</p>
+    <p>A configuration file protected for your Windows user cannot be opened on another computer or by another Windows user. Export a backup in case the computer breaks or the operating system is reinstalled. With password protection, a backup also helps if the configuration file is lost.</p>
     <ol>
       <li>Choose <b>et-OTP-v2 → Export backup...</b>.</li>
       <li>Enter a backup password twice. With password protection, enter the current password as well.</li>
       <li>Choose the folder and the file name. The suggested name is <code>et-otp-v2-backup-&lt;date&gt;.etotp-backup</code>.</li>
     </ol>
-    <p>Whatever protects the configuration file, the backup is encrypted with the backup password (PBKDF2-HMAC-SHA256 and AES-256-GCM). So a backup made with protection for your Windows user can be restored on another computer, on macOS or on Linux, too. The backup password is needed to restore it; without it, the backup cannot be restored. Keep the file somewhere other than the computer, for example on a USB drive.</p>
+    <p>However the configuration file is protected, the backup is encrypted with the backup password (PBKDF2-HMAC-SHA256 and AES-256-GCM). So a backup made with protection for your Windows user can be restored on another computer, on macOS or on Linux, too. The backup password is needed to restore it; without it, the backup cannot be restored. Keep the file somewhere other than the computer, for example on a USB drive.</p>
     <p>To restore, choose <b>et-OTP-v2 → Restore from backup...</b> and enter the file and the backup password. Then choose one of these:</p>
     <ul>
       <li><b>Add</b>: registers the services of the backup whose key is not registered yet.</li>
@@ -147,7 +147,7 @@ if not defined MFA_CODE exit /b 1</code></pre>
   <section id="upgrade">
     <h2>Upgrading from et-otp 1.x and et-otp-v2 2.0</h2>
     <p>et-otp-v2 reads the configuration files of the original et-otp and of et-otp-v2 2.0, so you can keep using your existing <code>.et-otp.properties</code>. Start et-otp-v2 in the same folder and unlock it with your current password.</p>
-    <p>On the first successful unlock, et-otp-v2 copies the old file to <code>.et-otp.properties.v1.bak</code> (et-otp 1.x) or <code>.et-otp.properties.v2.bak</code> (et-otp-v2 2.0) and re-writes <code>.et-otp.properties</code> in the new format, which holds several services.</p>
+    <p>On the first successful unlock, et-otp-v2 copies the old file to <code>.et-otp.properties.v1.bak</code> (et-otp 1.x) or <code>.et-otp.properties.v2.bak</code> (et-otp-v2 2.0) and rewrites <code>.et-otp.properties</code> in the new format, which holds several services.</p>
     <div class="note">
       <p><b>After upgrading from et-otp 1.x, check the code once.</b> The old format cannot detect every wrong password. If the codes are not accepted by the service, restore the backup file and unlock again with the correct password.</p>
       <p>et-otp 1.x and et-otp-v2 2.0 cannot read the new format. If you need to go back, use the backup file. Once the new codes work, delete the backup.</p>
