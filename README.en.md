@@ -18,17 +18,17 @@ See the [et-otp-v2 website](https://disk0401.github.io/et-otp-v2/) for the user 
 
 - Generates one-time passwords according to RFC 6238 (TOTP) and shows the next code and the remaining time. SHA-1, SHA-256 and SHA-512, 6 to 8 digits and any period are supported.
 - Holds any number of services. Click a code or press Copy to copy it to the clipboard.
-- Registers a service by reading the QR code shown on the screen; on Windows also from a window behind other windows. A QR code image file or the key typed in also works.
+- Registers a service by reading a QR code shown on the screen, on Windows even from a window behind other windows. You can also register from a QR code image file or by typing in the key.
 - Stores the services encrypted in `.et-otp.properties`. On Windows, choose between protection for your Windows user (DPAPI, no password) and a password (PBKDF2-HMAC-SHA256 and AES-256-GCM); on macOS and Linux a password is used.
 - Shows an icon for each service: icons of well-known services are bundled, and an icon can be fetched from the site of a service when you ask for it, or set from an image file.
-- Exports the services to a file encrypted with a password of its own. With protection for your Windows user, too, this backup can be restored on another computer.
-- The user interface is in English and Japanese. It is shown in Japanese if the language of the OS is Japanese, else in English, and can be switched on the General tab of the settings.
-- When started without a configuration file, a setup wizard opens. It asks for the protection and the location of the configuration file and, on Windows, can create a desktop shortcut. You can also choose an existing configuration file and keep using it.
+- Exports the services to a file encrypted with its own password. The backup can be restored on another computer even when the services are protected for your Windows user.
+- The user interface is in English and Japanese. It follows the language of the OS (Japanese on a Japanese system, English otherwise) and can be switched on the General tab of the settings.
+- If there is no configuration file at startup, a setup wizard opens. It asks for the protection and the location of the configuration file and, on Windows, can create a desktop shortcut. You can also choose an existing configuration file and keep using it.
 - The window opens where it was when the program was last closed.
-- With password protection, the services are locked again after a time without use, and when the computer is locked or sleeps. et-OTP-v2 > Lock (Ctrl+L) locks at once.
-- Type part of a name into the search field to show only those services; choose one with the up and down keys and press Enter to copy its code. The edit menu changes the order of the services.
-- The codes can be hidden as "••• •••" against screen sharing and onlookers; they can still be copied. On Windows and macOS 27 or later, the windows of et-OTP-v2 are left out of screen sharing and screenshots (this can be turned off).
-- Started with `--code <name>`, it writes the code without opening the window, for batch files and scripts.
+- With password protection, et-otp-v2 locks again after a period without use and when the computer is locked or goes to sleep. To lock at once, choose et-OTP-v2 > Lock (Ctrl+L).
+- Type part of a name into the search field to show only the matching services; choose one with the up and down keys and press Enter to copy its code. You can change the order of the services from the Edit menu.
+- To guard against screen sharing and onlookers, the codes can be shown as "••• •••" and still be copied. On Windows and macOS 27 or later, the et-OTP-v2 windows are left out of screen sharing and screenshots (this can be turned off).
+- With `--code <name>`, it writes the code without opening the window, so batch files and scripts can use it.
 
 ## Requirements
 
@@ -56,7 +56,7 @@ java -jar target/et-otp-<version>.jar
 
 Replace `<version>` with the `<version>` in pom.xml (for example `2.0.0`).
 
-The settings are saved to `.et-otp.properties` in your home folder. To use another folder or file name, press "Change..." in the setup wizard, or "Move..." on the General tab of the settings. The chosen location is remembered in `.et-otp-location.properties` in your home folder and used on the next start. Without a chosen location, a `.et-otp.properties` in the working directory is used if it exists (same as et-otp 1.x). Help → About shows the full path. The language and the window position are saved to `.et-otp-ui.properties` in the same folder.
+The settings are saved to `.et-otp.properties` in your home folder. To use another folder or file name, press "Change..." in the setup wizard, or "Move..." on the General tab of the settings. The chosen location is remembered in `.et-otp-location.properties` in your home folder and used on the next start. If no location has been chosen and the working directory contains a `.et-otp.properties`, that file is used (as in et-otp 1.x). Help → About shows the full path. The language and the window position are saved to `.et-otp-ui.properties` in the same folder.
 
 ## Get a code on the command line
 
@@ -67,47 +67,47 @@ for /f "delims=" %%c in ('call "C:\tools\et-otp-v2\et-otp-v2.bat" --code AWS') d
 if not defined MFA_CODE exit /b 1
 ```
 
-- The name is the name shown in et-otp-v2. If no service has exactly this name, the case is ignored. `--list` writes the names of the registered services.
-- If the services are protected with a password, you are asked for it (not with `--password-stdin`); the password is not shown while you type. With protection for your Windows user, the code is written without a question.
-- If the code changes within 3 seconds, the next code is waited for and written.
-- Only the code (with `--json` the JSON) goes to the standard output; the password prompt and errors go to the standard error output. The exit code is 0 when done, 1 when failed and 2 for wrong options.
-- The configuration file is only read, so this also works while the window is open. Files in the format of et-otp 1.x and et-otp-v2 2.0 cannot be read: open them once in the window to convert them first.
-- With the portable edition for macOS run `sh et-otp-v2.command --code AWS`, for Linux `sh et-otp-v2.sh --code AWS`, with the plain JAR `java -jar et-otp-v2-<version>.jar --code AWS`.
+- Use the name shown in et-otp-v2. If no service has exactly that name, et-otp-v2 looks for one ignoring case. `--list` writes the names of the registered services.
+- If the services are protected with a password, you are prompted for it (unless you use `--password-stdin`), and the password is not shown as you type. With protection for your Windows user, the code is written without a prompt.
+- If the code changes within 3 seconds, et-otp-v2 waits for the next code and writes that one.
+- Only the code (or the JSON, with `--json`) goes to standard output; the password prompt and errors go to standard error. The exit code is 0 on success, 1 on failure and 2 for invalid options.
+- The configuration file is only read, never written, so this also works while the window is open. Files in the et-otp 1.x and et-otp-v2 2.0 formats cannot be read: open them once in the window first to convert them.
+- With the portable edition, run `sh et-otp-v2.command --code AWS` on macOS and `sh et-otp-v2.sh --code AWS` on Linux. With the plain JAR, run `java -jar et-otp-v2-<version>.jar --code AWS`.
 
-More options; `--help` lists them:
+Other options (`--help` lists them):
 
-- `--copy`: copies the code to the clipboard instead of writing it. The copied code is not removed later. On Linux without an app that keeps the clipboard, the copied code is gone when et-otp-v2 ends.
+- `--copy`: copies the code to the clipboard instead of writing it. et-otp-v2 does not clear it from the clipboard later. On Linux, if no clipboard manager is running, the copied code disappears when et-otp-v2 exits.
 - `--next`: writes the code of the next period, without waiting for the code to change.
 - `--json`: writes the result as JSON. For `--code`: the name (`name`), the code (`code`), the seconds left (`secondsLeft`), the period (`period`) and the next code (`next`). Characters outside ASCII are written as `\uXXXX`, so the encoding of the console does not matter.
-- `--password-stdin`: reads the password from the first line of the standard input. This works without a console, for example in the Task Scheduler or when called from another program. A wrong password fails without asking again.
+- `--password-stdin`: reads the password from the first line of the standard input. This works without a console, for example in the Task Scheduler or when called from another program. If the password is wrong, it fails without asking again.
 - `--config <file>`: uses this configuration file.
 - `--version`: writes the version.
 
-For `--password-stdin`, give the password for example from a file that other users cannot read:
+For example, pass the password to `--password-stdin` from a file that other users cannot read:
 
 ```bat
 "C:\tools\et-otp-v2\et-otp-v2.bat" --code AWS --password-stdin < "%USERPROFILE%\secret\et-otp-password.txt"
 ```
 
-There is no way to give the password in an environment variable or as an argument: arguments can be seen by other programs, and environment variables can be read by other programs of the same user and are passed on to the programs started. `echo password | ...` works as well, but cmd starts the left side of the pipe as another cmd, whose command line, with the password, can be seen by other programs; the password also stays in the batch file or the command history. In cmd, `echo password | ...` also passes the space before the "|": write `echo password| ...` without the space.
+There is no option to pass the password in an environment variable or as an argument. Other programs can see command-line arguments, and other programs run by the same user can read environment variables, which are also passed on to every program started. `echo password | ...` also works, but cmd runs the left side of the pipe as a separate cmd whose command line, password included, is visible to other programs, and the password also stays in the batch file or the command history. Note too that in cmd, `echo password | ...` passes the space before the "|" as part of the password, so write `echo password| ...` without the space.
 
 ## Service icons
 
-The list shows an icon left of each service, chosen in this order:
+The list shows an icon to the left of each service, chosen in this order:
 
 1. An image set with "Set icon from image file..." or fetched with "Fetch icon from the site..." in the edit menu (whichever was set last).
-2. A bundled icon, found by the issuer in the QR code, or by the name of the service if there is no issuer.
+2. A bundled icon, matched by the issuer in the QR code, or by the service name if there is no issuer.
 3. The first letter of the name on a color derived from the name.
 
-An icon is fetched from a site only when you choose "Fetch icon from the site...", check the site shown and press Fetch; et-otp-v2 never connects at any other time. It asks the site of the service directly over HTTPS and uses no third-party icon service. No cookies are sent, the top page is only read from the site itself, redirects are followed at most three times, and an icon the site keeps on another server (such as a CDN) is fetched from there, but never from an IP address or a server with a local network name. The proxy settings of the operating system are used, and the certificate authorities trusted by the operating system (the Windows certificate store, the macOS keychains) are trusted besides those of Java, so that fetching also works in company networks that inspect HTTPS. The site of well-known services is filled in; for other services, enter the address of the site where you use the service. The domain of an e-mail address in the account name is never used.
+An icon is fetched from a site only when you choose "Fetch icon from the site...", check the site shown and press Fetch; et-otp-v2 never connects at any other time. It connects to the site of the service directly over HTTPS and uses no third-party icon service. It sends no cookies, reads the top page only from the site itself, and follows at most three redirects. If the site keeps its icon on another server (such as a CDN), et-otp-v2 fetches it from there, but it never connects to an IP address or to a server with a local network name. It uses the proxy settings of the operating system and, besides Java's certificate authorities, trusts those the operating system trusts (the Windows certificate store, the macOS keychains), so that fetching also works on company networks that inspect HTTPS. For well-known services the site address is filled in; for others, enter the address of the site where you use the service. et-otp-v2 never guesses the site from the e-mail address in the account name.
 
 The image is scaled to a 64 x 64 PNG and stored with the service in the encrypted configuration file (and in backups), never in an unencrypted cache. PNG, JPEG, GIF, BMP and ICO images can be used; SVG and WebP icons of sites are not supported. The icons can be turned off on the Display tab of the settings.
 
 ## Backup and restore
 
-A configuration file protected for your Windows user cannot be opened on another computer or by another Windows user. Export a backup in case the computer breaks or the operating system is installed again.
+A configuration file protected for your Windows user cannot be opened on another computer or by another Windows user. Export a backup in case the computer breaks or the operating system is reinstalled.
 
-- **Export backup...** in the **et-OTP-v2** menu writes the services to one file, encrypted with a backup password chosen at that time (PBKDF2-HMAC-SHA256 and AES-256-GCM). With password protection, the current password is asked as well.
+- **Export backup...** in the **et-OTP-v2** menu writes the services to one file, encrypted with a backup password you choose at that time (PBKDF2-HMAC-SHA256 and AES-256-GCM). With password protection, you also enter the current password.
 - **Restore from backup...** asks for the file and the backup password, and then for **Add** or **Replace**. **Add** registers the services whose key is not registered yet. **Replace** deletes the registered services and registers the services of the backup.
 - A wrong password or a damaged file leaves the configuration file unchanged.
 - If no backup was exported, or services were added or deleted after it, a note is shown under the list. It can be turned off on the **General** tab of the settings.
@@ -116,7 +116,7 @@ To restore on a new computer, create a configuration file with the setup wizard 
 
 ## Upgrading from et-otp 1.x and et-otp-v2 2.0
 
-et-otp-v2 reads the `.et-otp.properties` of the original et-otp and of et-otp-v2 2.0. On the first unlock it copies the old file to `.et-otp.properties.v1.bak` (et-otp 1.x) or `.et-otp.properties.v2.bak` (et-otp-v2 2.0) and then re-writes it in the new format, which holds several services. See [Upgrading from et-otp 1.x](https://disk0401.github.io/et-otp-v2/#upgrade) for details.
+et-otp-v2 reads the `.et-otp.properties` of the original et-otp and of et-otp-v2 2.0. On the first unlock it copies the old file to `.et-otp.properties.v1.bak` (et-otp 1.x) or `.et-otp.properties.v2.bak` (et-otp-v2 2.0) and then rewrites it in the new format, which holds several services. See [Upgrading from et-otp 1.x](https://disk0401.github.io/et-otp-v2/#upgrade) for details.
 
 ## Main changes from upstream
 
